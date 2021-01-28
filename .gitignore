@@ -1,2 +1,4 @@
 oppgave1
-oppgave1.dSYM
+oppgave2
+oppgave*.dSYM
+*.o
