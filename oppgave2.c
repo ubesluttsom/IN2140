@@ -41,13 +41,13 @@ char* string_between (char* s, char c)
 {
   // Gjenbruker funksjonen fra forrige deloppgave for å vurdere nøyaktig hvor
   // mye minne vi vil allokere.
-  int størrelse = distance_between(s, c);
+  int lengde = distance_between(s, c);
   // Vi utnytter at forrige deloppgave har akkurat samme feilstatus som
   // denne, og videreformidler dette.
-  if (størrelse == -1) return NULL;
+  if (lengde == -1) return NULL;
 
   // Allokkerer riktig mengde minne.
-  char* retur_streng = malloc(sizeof(char)*størrelse);
+  char* retur_streng = malloc(sizeof(char)*lengde);
 
   // Ittererer over strengen `s` til vi finner \0.
   for (int i = 0; s[i] != 0; i++) {
