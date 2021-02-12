@@ -1,6 +1,6 @@
 # Oppgave 3
 
-## Oprativsystemer
+## Operativsystemer
 
 > 1. Et OS er en samling av programmer eller funksjoner som opererer som et
 >    mellomlag mellom hardware og brukerne av systemet.
