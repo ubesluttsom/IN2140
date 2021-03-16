@@ -9,7 +9,10 @@ OPPGAVE2    = oppgave2/oppgave2.md
 BRUKERNAVN  = martimn
 KILDEKODE   = $(OPPGAVE1) $(OPPGAVE2) Makefile
 INNLEVERING = $(BRUKERNAVN).tar.gz
-FLAGG       = -Wall
+FLAGG       = -Wall -Wextra
+
+run: ruterdrift
+	./ruterdrift
 
 all: $(OPPGAVER)
 
