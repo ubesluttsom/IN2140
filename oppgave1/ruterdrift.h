@@ -1,7 +1,9 @@
+#include <stdio.h>
+
 /* STRUKTURER */
 
 struct ruter {
-  unsigned int ruter_id;
+  int ruter_id;
   unsigned char flagg;
   char * prod_modell[250];
   // Koblinger mellom rutere. Siden «kantene» er ensrettet er konvensjonen min:
@@ -13,22 +15,24 @@ struct ruter {
   // (little endian) er i bruk. Må initialiseres til null.
   unsigned short aktive_tilkoblinger;
   unsigned short aktive_frakoblinger;
-                                   
+};
+
+struct ruter_array {
+  int antall;
+  struct ruter * rutere;
 };
 
 
 /* FUNKSJONSDEKLARASJONER */
 
 struct ruter ruter(
-    unsigned char ruter_id,
+    int ruter_id,
     unsigned char flagg,
-    int prod_modell_lengde,
-    char * prod_modell,
-    struct ruter * tilkoblinger,
-    struct ruter * frakoblinger,
-    unsigned short aktive_tilkoblinger,
-    unsigned short aktive_frakoblinger);
+    char * prod_modell);
 void printr(struct ruter ruter);
 int legg_til_kobling(struct ruter * kilde, struct ruter * dest);
 int sett_flagg(struct ruter * ruter, int flagg_bit, int ny_verdi);
 int sett_modell(struct ruter * ruter, char * ny_prod_modell);
+struct ruter_array * innlesing(FILE* fil);
+int free_ruter_array(struct ruter_array * data);
+struct ruter * ruterid(int ruter_id, struct ruter_array * data);

@@ -8,21 +8,30 @@
 
 /* MAIN */
 
-int main(/* int argc, char* argv[] */) {
-  // struct ruter * frakoblinger = malloc(sizeof(struct ruter *) * 10);
-  // struct ruter * tilkoblinger = malloc(sizeof(struct ruter *) * 10);
-  struct ruter ruter1 = ruter(37, 16, 5, "Zyxel", NULL, NULL, 0, 0);
-  struct ruter ruter2 = ruter(42, 19, 7, "Netgear", NULL, NULL, 0, 0);
-  legg_til_kobling(&ruter1, &ruter2);
-  printr(ruter1);
-  printr(ruter2);
-  sett_flagg(&ruter1, 0, 1);
-  sett_flagg(&ruter1, 1, 1);
-  sett_flagg(&ruter1, 2, 1);
-  sett_flagg(&ruter1, 4, 8);
-  sett_flagg(&ruter1, 4, 16);
-  sett_modell(&ruter1, "D-link");
-  printr(ruter1);
+int main(int argc, char* argv[]) {
+  if (argc != 2) {
+    if (argc < 2) printf("Error: Inputfil må spesifiseres. Avslutter ... \n");
+    if (argc > 2) printf("Error: Tar kun et argument. Avslutter ... \n");
+    return EXIT_FAILURE;
+  }
+
+  printf("Åpner fil: %s ... \n", argv[1]);
+
+  char* filnavn = argv[1];
+  FILE* fil = fopen(filnavn, "r");
+
+  if(!fil) {
+    printf("Error: Filåpning feilet!");
+    return EXIT_FAILURE;
+  }
+
+  struct ruter_array * data = innlesing(fil);
+
+  for (int i = 0; i < data->antall; ++i) {
+    printr(data->rutere[i]);
+  }
+
+  free_ruter_array(data);
 }
 
 
@@ -30,31 +39,15 @@ int main(/* int argc, char* argv[] */) {
 
 // Oppretter en ny ruterstruktur.
 struct ruter ruter(
-    unsigned char  ruter_id,
+    int            ruter_id,
     unsigned char  flagg,
-    int            prod_modell_lengde,
-    char *         prod_modell,
-    struct ruter * tilkoblinger,
-    struct ruter * frakoblinger,
-    unsigned short aktive_tilkoblinger,
-    unsigned short aktive_frakoblinger) {
-  // Lager ny ruter struktur, noen vriabler er null midlertidig.
+    char *         prod_modell) {
+  // Lager ny ruter struktur, noen variabler er null inntil videre.
   struct ruter ny_ruter = { ruter_id, flagg, {NULL}, {NULL}, {NULL}, 0, 0 };
 
-  // Kopierer over prod./mod. streng, byte for byte.
-  strncpy((char *) ny_ruter.prod_modell,
-          prod_modell, prod_modell_lengde);
-
-  // Kopierer over rutertilkoblinger (hvis det er noen) ...
-  if (tilkoblinger != NULL) {
-    memcpy(ny_ruter.tilkoblinger, tilkoblinger, 10);
-    ny_ruter.aktive_tilkoblinger = aktive_tilkoblinger;
-  }
-  // ... og ruterfrakoblinger
-  if (frakoblinger != NULL) {
-    memcpy(ny_ruter.frakoblinger, frakoblinger, 10);
-    ny_ruter.aktive_frakoblinger = aktive_frakoblinger;
-  }
+  // Kopierer over prod./mod. streng, byte for byte. Egentlig bare et innpakket
+  // `strncpy` kall, men jeg får vel gjenbruke kode hvor jeg kan.
+  sett_modell(&ny_ruter, prod_modell);
 
   return ny_ruter;
 }
@@ -64,20 +57,20 @@ struct ruter ruter(
 // og `aktive_tilkoblinger`.
 int legg_til_kobling(struct ruter * kilde, struct ruter * dest) {
   // Finner ledige «hull» i arrayene med koblinger.
-  int i = 9, j = 9;
-  while (kilde->aktive_frakoblinger >> i) {
-    i--;
+  int i = 0, j = 0;
+  while ((kilde->aktive_frakoblinger >> i) & 1) {
+    ++i;
   }
-  while (dest->aktive_tilkoblinger >> j) {
-    j--;
+  while ((dest->aktive_tilkoblinger >> j) & 1) {
+    ++j;
   }
 
   // Sjekker om vi har overskridet kapasiteten på 10 plasser i arrayene.
-  if (i < 0) {
+  if (i > 9) {
     printf("Error: koblinger i ruter %d overfyldt! "
            "Ignorerer kommando.\n", kilde->ruter_id);
     return 0;
-  } else if (j < 0) {
+  } else if (j > 9) {
     printf("Error: koblinger i ruter %d overfyldt! "
            "Ignorerer kommando.\n", dest->ruter_id);
     return 0;
@@ -89,11 +82,11 @@ int legg_til_kobling(struct ruter * kilde, struct ruter * dest) {
 
   // Oppdaterer hvilke koblinger som er aktive med litt bitfikling.
   kilde->aktive_frakoblinger = (1 << i) | kilde->aktive_frakoblinger;
-  dest->aktive_tilkoblinger  = (1 << j) | dest->aktive_frakoblinger;
+  dest->aktive_tilkoblinger  = (1 << j) | dest->aktive_tilkoblinger;
   return 1;
 }
 
-/* Printer ruterstrukturer */
+// Printer ruterstrukturer
 void printr(struct ruter ruter) {
   printf("Ruter-ID:\t%d\n",  ruter.ruter_id);
 
@@ -110,14 +103,14 @@ void printr(struct ruter ruter) {
   printf("Prod./modell:\t%s\n", (char*) ruter.prod_modell);
 
   printf("Tilkoblinger:\n");
-  for (int i = 9; i >= 0; i--) {
+  for (int i = 0; i < 10; ++i) {
     if ((1 << i) & ruter.aktive_tilkoblinger) {
       printf(" <- %d\n", ruter.tilkoblinger[i]->ruter_id);
     }
   }
 
   printf("Frakoblinger:\n");
-  for (int i = 9; i >= 0; i--) {
+  for (int i = 0; i < 10; ++i) {
     if ((1 << i) & ruter.aktive_frakoblinger) {
       printf(" -> %d\n", ruter.frakoblinger[i]->ruter_id);
     }
@@ -154,4 +147,66 @@ int sett_flagg(struct ruter * ruter, int flagg_bit, int ny_verdi) {
 int sett_modell(struct ruter * ruter, char * ny_prod_modell) {
   strncpy((char *) ruter->prod_modell, ny_prod_modell, 249);
   return 0;
+}
+
+
+/* FILINNLESING */
+
+struct ruter_array * innlesing(FILE* fil) {
+
+  struct ruter_array * data = malloc(sizeof(struct ruter_array));
+
+  // Leser inn anntall rutere fra fil, lagrer i struktur.
+  fread(&data->antall, sizeof(int), 1, fil);
+  printf("Antall rutere i fil: %d\n", data->antall);
+
+  // Allokerer plass til antall rutere spesifisert i filen. Innleveringen
+  // definerer ingen komando for opprettelse av nye rutere, så det er ingen
+  // behov for å individuelt allokere plass for hver ruter; tenker det er
+  // greiest å allokere én stor chunk, som trenger bare et kall på `free` ved
+  // terminering av programmet.
+  data->rutere = malloc(sizeof(struct ruter)*data->antall);
+
+  // Leser inn «N» blokker med ruterinformasjon og oppretter en ruter for hver
+  // av dem.
+  for (int i = 0; i < data->antall; ++i) {
+    // Leser inn info.
+    int ruter_id;
+    fread(&ruter_id, sizeof(int), 1, fil);
+    unsigned char flagg = fgetc(fil);
+    unsigned char prod_modell_len = fgetc(fil) + 1; // pluss `\0`
+    char prod_modell[prod_modell_len];
+    fread(prod_modell, sizeof(char), prod_modell_len, fil);
+    // Lager ruter struktur.
+    data->rutere[i] = ruter(ruter_id, flagg, prod_modell);
+  }
+
+  // Leser inn informasjonen om koblinger mellom rutere.  Ser på 2 og 2 int-er
+  // som leses inn i `buf`, helt til vi når EOF og `fread` returnerer 0.
+  int buf[2];
+  while (fread(&buf, sizeof(int), 2, fil)) {
+    struct ruter * ruter1 = ruterid(buf[0], data);
+    struct ruter * ruter2 = ruterid(buf[1], data);
+    legg_til_kobling(ruter1, ruter2);
+  }
+
+  return data;
+}
+
+// Frigjør allokert minne til datastrukruren.
+int free_ruter_array(struct ruter_array * data) {
+  free(data->rutere);
+  free(data);
+  return 0;
+}
+
+// Finner riktig ruterpeker i datastrukturen, gitt en ruter ID.
+struct ruter * ruterid(int ruter_id, struct ruter_array * data) {
+  for (int i = 0; i < data->antall; ++i) {
+    if (data->rutere[i].ruter_id == ruter_id) {
+      return &data->rutere[i];
+    }
+  }
+  printf("Error: fant ingen ruter med id `%d`.\n", ruter_id);
+  return NULL;
 }
