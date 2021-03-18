@@ -1,6 +1,6 @@
 // Inkluderer ruterstuktur- og funksjonsdeklarasjon.
 #include "ruterdrift.h"
-
+// Standardbibliotek.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +28,15 @@ int main(int argc, char* argv[]) {
   struct ruter_array * data = innlesing(fil);
 
   for (int i = 0; i < data->antall; ++i) {
-    printr(data->rutere[i]);
+    printr(&data->rutere[i]);
+  }
+
+  slett_ruter(ruterid(789, data), data);
+  slett_ruter(ruterid(865, data), data);
+  slett_ruter(ruterid(865, data), data);
+
+  for (int i = 0; i < data->antall; ++i) {
+    printr(&data->rutere[i]);
   }
 
   free_ruter_array(data);
@@ -49,6 +57,12 @@ struct ruter ruter(
   // `strncpy` kall, men jeg får vel gjenbruke kode hvor jeg kan.
   sett_modell(&ny_ruter, prod_modell);
 
+  // Nuller ut til-/frakoblinger, inntil vi kobler dem sammen senere.
+  for (int i = 0; i < 9; ++i) {
+    ny_ruter.tilkoblinger[i] = NULL;
+    ny_ruter.frakoblinger[i] = NULL;
+  }
+
   return ny_ruter;
 }
 
@@ -58,22 +72,20 @@ struct ruter ruter(
 int legg_til_kobling(struct ruter * kilde, struct ruter * dest) {
   // Finner ledige «hull» i arrayene med koblinger.
   int i = 0, j = 0;
-  while ((kilde->aktive_frakoblinger >> i) & 1) {
-    ++i;
+  for ( ; kilde->frakoblinger[i] != NULL; ++i) {
+    // Sjekker om vi har overskridet kapasiteten på 10 plasser.
+    if (i > 9) {
+      printf("Error: koblinger i ruter %d overfyldt! "
+             "Ignorerer kommando.\n", kilde->ruter_id);
+      return 0;
+    }
   }
-  while ((dest->aktive_tilkoblinger >> j) & 1) {
-    ++j;
-  }
-
-  // Sjekker om vi har overskridet kapasiteten på 10 plasser i arrayene.
-  if (i > 9) {
-    printf("Error: koblinger i ruter %d overfyldt! "
-           "Ignorerer kommando.\n", kilde->ruter_id);
-    return 0;
-  } else if (j > 9) {
-    printf("Error: koblinger i ruter %d overfyldt! "
-           "Ignorerer kommando.\n", dest->ruter_id);
-    return 0;
+  for ( ; dest->tilkoblinger[j] != NULL; ++j) {
+    if (j > 9) {
+      printf("Error: koblinger i ruter %d overfyldt! "
+             "Ignorerer kommando.\n", dest->ruter_id);
+      return 0;
+    }
   }
 
   // Setter inn `til` på den første ledige plassen som vi fant.
@@ -81,38 +93,38 @@ int legg_til_kobling(struct ruter * kilde, struct ruter * dest) {
   dest->tilkoblinger[j]  = kilde;
 
   // Oppdaterer hvilke koblinger som er aktive med litt bitfikling.
-  kilde->aktive_frakoblinger = (1 << i) | kilde->aktive_frakoblinger;
-  dest->aktive_tilkoblinger  = (1 << j) | dest->aktive_tilkoblinger;
+  // kilde->aktive_frakoblinger = (1 << i) | kilde->aktive_frakoblinger;
+  // dest->aktive_tilkoblinger  = (1 << j) | dest->aktive_tilkoblinger;
   return 1;
 }
 
 // Printer ruterstrukturer
-void printr(struct ruter ruter) {
-  printf("Ruter-ID:\t%d\n",  ruter.ruter_id);
+void printr(struct ruter * ruter) {
+  printf("Ruter-ID:\t%d\n",  ruter->ruter_id);
 
   // Printer flagg og gjør bit-oprerasjoner for å vise hva de betyr
-  printf("Flagg:\t\t%#x\n", ruter.flagg);
-  if (ruter.flagg & 1) printf(" - Er bruk:\tJA\n");
+  printf("Flagg:\t\t%#x\n", ruter->flagg);
+  if (ruter->flagg & 1) printf(" - Er bruk:\tJA\n");
   else                 printf(" - Er bruk:\tNEI\n");
-  if (ruter.flagg & 2) printf(" - Trådløs:\tJA\n");
+  if (ruter->flagg & 2) printf(" - Trådløs:\tJA\n");
   else                 printf(" - Trådløs:\tNEI\n");
-  if (ruter.flagg & 4) printf(" - 5 GHz:\tJA\n");
+  if (ruter->flagg & 4) printf(" - 5 GHz:\tJA\n");
   else                 printf(" - 5 GHz:\tNEI\n");
-  printf(" - Endr.nr.:\t%d\n", ruter.flagg >> 4);
+  printf(" - Endr.nr.:\t%d\n", ruter->flagg >> 4);
 
-  printf("Prod./modell:\t%s\n", (char*) ruter.prod_modell);
+  printf("Prod./modell:\t%s\n", (char*) ruter->prod_modell);
 
   printf("Tilkoblinger:\n");
-  for (int i = 0; i < 10; ++i) {
-    if ((1 << i) & ruter.aktive_tilkoblinger) {
-      printf(" <- %d\n", ruter.tilkoblinger[i]->ruter_id);
+  for (int i = 0; i < 9; ++i) {
+    if (ruter->tilkoblinger[i] != NULL) {
+      printf(" <- %d\n", ruter->tilkoblinger[i]->ruter_id);
     }
   }
 
   printf("Frakoblinger:\n");
-  for (int i = 0; i < 10; ++i) {
-    if ((1 << i) & ruter.aktive_frakoblinger) {
-      printf(" -> %d\n", ruter.frakoblinger[i]->ruter_id);
+  for (int i = 0; i < 9; ++i) {
+    if (ruter->frakoblinger[i] != NULL) {
+      printf(" -> %d\n", ruter->frakoblinger[i]->ruter_id);
     }
   }
 }
@@ -146,6 +158,47 @@ int sett_flagg(struct ruter * ruter, int flagg_bit, int ny_verdi) {
 // char-arrayet med `\0`.
 int sett_modell(struct ruter * ruter, char * ny_prod_modell) {
   strncpy((char *) ruter->prod_modell, ny_prod_modell, 249);
+  return 0;
+}
+
+// Sletter en `ruter`. 
+int slett_ruter(struct ruter * ruter, struct ruter_array * data) {
+  if (ruter == NULL) {
+    printf("Error: fant ikke ruter som skulle slettes.\n");
+    return 0;
+  }
+
+  // Nuller ut til-/frakoblinger.
+  for (int i = 0; i < 9; ++i) {
+    if (ruter->tilkoblinger[i] != NULL) {
+      for (int j = 0; j < 9; ++j) {
+        if (ruter->tilkoblinger[i]->frakoblinger[j] == ruter) {
+          ruter->tilkoblinger[i]->frakoblinger[j] = NULL;
+        }
+      }
+    }
+
+    if (ruter->frakoblinger[i] != NULL) {
+      for (int j = 0; j < 9; ++j) {
+        if (ruter->frakoblinger[i]->tilkoblinger[j] == ruter) {
+          ruter->frakoblinger[i]->tilkoblinger[j] = NULL;
+        }
+      }
+    }
+  }
+
+  for (int i = 0; i < data->antall; ++i) {
+    // Hvis `ruter` peker til samme sted som `data->rutere[i]` ...
+    if (ruter == &data->rutere[i]) {
+      // ... null ut denne ruteren.
+      struct ruter null_ruter = { 0, 0, {NULL}, {NULL}, {NULL}, 0, 0 };
+      memcpy(&data->rutere[i], &null_ruter, sizeof(null_ruter));
+      // Trenger ikke frigjøre minnet, siden det ble allokert i en stor chunk
+      // med plass til ALLE ruterene som ble lest inn.
+      return 1;
+    }
+  }
+  printf("Error: fant ikke ruter som skulle slettes.\n");
   return 0;
 }
 
