@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
   struct database * data = innlesing(fil);
 
   for (int i = 0; i < data->antall; ++i) {
-    printr(&data->ruter[i]);
+    printr(data->ruter[i]);
   }
 
   slett_ruter(ruterid(789, data), data);
@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
   slett_ruter(ruterid(865, data), data);
 
   for (int i = 0; i < data->antall; ++i) {
-    printr(&data->ruter[i]);
+    printr(data->ruter[i]);
   }
 
 
@@ -51,25 +51,27 @@ int main(int argc, char* argv[]) {
 /* KOMMANDOER */
 
 // Oppretter en ny ruterstruktur.
-struct ruter ruter(
+struct ruter * ruter(
     int           ruter_id,
     unsigned char flagg,
     unsigned char prod_modell_len,
     char *        prod_modell) {
   // Lager ny ruter struktur, noen variabler er null inntil videre.
+  struct ruter * ny_ruter_peker = malloc(sizeof(struct ruter));
   struct ruter ny_ruter = { ruter_id, flagg, prod_modell_len, {NULL}, {NULL}, {NULL} };
+  memcpy(ny_ruter_peker, &ny_ruter, sizeof(struct ruter));
 
   // Kopierer over prod./mod. streng, byte for byte. Egentlig bare et innpakket
   // `strncpy` kall, men jeg får vel gjenbruke kode hvor jeg kan.
-  sett_modell(&ny_ruter, prod_modell);
+  sett_modell(ny_ruter_peker, prod_modell);
 
-  // Nuller ut til-/frakoblinger, inntil vi kobler dem sammen senere.
+  // Nuller ut til-/frakoblinger, vi kobler dem sammen senere.
   for (int i = 0; i < 9; ++i) {
-    ny_ruter.tilkoblinger[i] = NULL;
-    ny_ruter.frakoblinger[i] = NULL;
+    ny_ruter_peker->tilkoblinger[i] = NULL;
+    ny_ruter_peker->frakoblinger[i] = NULL;
   }
 
-  return ny_ruter;
+  return ny_ruter_peker;
 }
 
 // Lager en kobling fra ruter `kilde` til ruter `dest`.
@@ -105,7 +107,9 @@ int legg_til_kobling(struct ruter * kilde, struct ruter * dest, struct database 
       data->nettverk->kobling[i]->kilde = kilde;
       data->nettverk->kobling[i]->dest  = dest;
       ++data->nettverk->antall;
-      printf("Legger til kobling %d -> %d i database. Totalt antall koblinger er nå %d.\n", kilde->ruter_id, dest->ruter_id, data->nettverk->antall);
+      printf("Legger til kobling %d -> %d i database. " 
+             "Totalt antall koblinger er nå %d.\n",
+             kilde->ruter_id, dest->ruter_id, data->nettverk->antall);
       return 1;
     }
   }
@@ -116,16 +120,20 @@ int legg_til_kobling(struct ruter * kilde, struct ruter * dest, struct database 
 
 // Printer ruterstrukturer
 void printr(struct ruter * ruter) {
+  if (ruter == NULL) {
+    // Ignorerer helt hvis `ruter` er NULL, for at print i `for`-løkker skal
+    // fungere (og ikke spamme error beskjeder).
+    // printf("Error: ruter som forsøkes å skrives ut et NULL.\n");
+    return;
+  }
+
   printf("Ruter-ID:\t%d\n",  ruter->ruter_id);
 
   // Printer flagg og gjør bit-oprerasjoner for å vise hva de betyr
   printf("Flagg:\t\t%#x\n", ruter->flagg);
-  if (ruter->flagg & 1) printf(" - Er bruk:\tJA\n");
-  else                 printf(" - Er bruk:\tNEI\n");
-  if (ruter->flagg & 2) printf(" - Trådløs:\tJA\n");
-  else                 printf(" - Trådløs:\tNEI\n");
-  if (ruter->flagg & 4) printf(" - 5 GHz:\tJA\n");
-  else                 printf(" - 5 GHz:\tNEI\n");
+  printf(" - Er bruk:\t%s\n", (ruter->flagg & 1) ? "JA" : "NEI");
+  printf(" - Trådløs:\t%s\n", (ruter->flagg & 2) ? "JA" : "NEI");
+  printf(" - 5 GHz:\t%s\n",   (ruter->flagg & 2) ? "JA" : "NEI");
   printf(" - Endr.nr.:\t%d\n", ruter->flagg >> 4);
 
   printf("Prod./modell:\t%s\n", (char*) ruter->prod_modell);
@@ -221,10 +229,11 @@ int slett_ruter(struct ruter * ruter, struct database * data) {
 
   for (int i = 0; i < data->antall; ++i) {
     // Hvis `ruter` peker til samme sted som `data->ruter[i]` ...
-    if (ruter == &data->ruter[i]) {
+    if (ruter == data->ruter[i]) {
       // ... null ut denne ruteren.
-      struct ruter null_ruter = { 0, 0, 0, {NULL}, {NULL}, {NULL} };
-      memcpy(&data->ruter[i], &null_ruter, sizeof(null_ruter));
+      printf("AVLUS: ...\n");
+      free(data->ruter[i]);
+      data->ruter[i] = NULL;
       // Trenger ikke frigjøre minnet, siden det ble allokert i en stor chunk
       // med plass til ALLE ruterene som ble lest inn.
       return 1;
@@ -239,7 +248,9 @@ int slett_ruter(struct ruter * ruter, struct database * data) {
 
 // Frigjør allokert minne til datastrukruren.
 int free_database(struct database * data) {
-  free(data->ruter);
+  for (int i = 0; i < data->antall; ++i) {
+    free(data->ruter[i]);
+  }
   for (int i = 0; i < data->nettverk->antall_max; ++i) {
     free(data->nettverk->kobling[i]);
   }
@@ -251,9 +262,10 @@ int free_database(struct database * data) {
 // Finner riktig ruterpeker i datastrukturen, gitt en ruter ID.
 struct ruter * ruterid(int ruter_id, struct database * data) {
   for (int i = 0; i < data->antall; ++i) {
-    if (data->ruter[i].ruter_id == ruter_id) {
-      return &data->ruter[i];
-    }
+    if (data->ruter[i] == NULL)
+      continue;
+    if (data->ruter[i]->ruter_id == ruter_id)
+      return data->ruter[i];
   }
   printf("Error: fant ingen ruter med id `%d`.\n", ruter_id);
   return NULL;
@@ -263,18 +275,21 @@ struct ruter * ruterid(int ruter_id, struct database * data) {
 /* FILINNLESING og -UTSKRIFT */
 
 struct database * innlesing(FILE* fil) {
-  struct database * data = malloc(sizeof(struct database));
-
-  // Leser inn anntall rutere fra fil, lagrer i struktur.
-  fread(&data->antall, sizeof(int), 1, fil);
-  printf("Antall rutere i fil: %d\n", data->antall);
+  // RUTERE
 
   // Allokerer plass til antall rutere spesifisert i filen. Innleveringen
-  // definerer ingen komando for opprettelse av nye rutere, så det er ingen
-  // behov for å individuelt allokere plass for hver ruter; tenker det er
-  // greiest å allokere én stor chunk, som trenger bare et kall på `free` ved
-  // terminering av programmet. `data->ruter` er en «flexible array member».
-  data->ruter = malloc(sizeof(struct ruter)*data->antall);
+  // definerer ingen komando for opprettelse av nye rutere, så vi kan være
+  // sikre på at vi allokerer nok plass. `data->ruter` er en «flexible array
+  // member», som vi tilpasser til «N», `antall_rutere`.
+  int antall_rutere;
+  fread(&antall_rutere, sizeof(int), 1, fil);
+  printf("Antall rutere i fil: %d\n", antall_rutere);
+  struct database * data = malloc(
+      sizeof(int) + 
+      sizeof(struct nettverk *) + 
+      sizeof(struct ruter *)*antall_rutere);
+  data->antall = antall_rutere;
+
 
   // Leser inn «N» blokker med ruterinformasjon og oppretter en ruter for hver
   // av dem.
@@ -319,19 +334,20 @@ struct database * innlesing(FILE* fil) {
 int utskrift(struct database * data, FILE * fil) {
   int faktisk_antall = 0;
   for (int i = 0; i < data->antall; ++i)
-    if (data->ruter[i].ruter_id)
+    if (data->ruter[i] != NULL)
       ++faktisk_antall;
   fwrite(&faktisk_antall, sizeof(int), 1, fil);
 
   for (int i = 0; i < data->antall; ++i) {
-    if (data->ruter[i].ruter_id == 0)
+    if (data->ruter[i] == NULL)
       continue;
     
-    putw(data->ruter[i].ruter_id, fil);
-    fputc(data->ruter[i].flagg, fil);
-    fputc(data->ruter[i].prod_modell_len, fil);
-    // printf("AVLUS: Skriver ruter %d til fil ...\n", data->ruter[i].ruter_id);
-    fputs((char *) &data->ruter[i].prod_modell, fil);
+    putw(data->ruter[i]->ruter_id, fil);
+    fputc(data->ruter[i]->flagg, fil);
+    fputc(data->ruter[i]->prod_modell_len, fil);
+    // printf("AVLUS: Skriver ruter %d til fil ...\n",
+    //        data->ruter[i]->ruter_id);
+    fputs((char *) &data->ruter[i]->prod_modell, fil);
     fputc('\0', fil);
   }
 
@@ -340,7 +356,9 @@ int utskrift(struct database * data, FILE * fil) {
       continue;
     putw(data->nettverk->kobling[i]->kilde->ruter_id, fil);
     putw(data->nettverk->kobling[i]->dest->ruter_id, fil);
-    printf("AVLUS: Skriver kobling %d -> %d til fil ...\n", data->nettverk->kobling[i]->kilde->ruter_id, data->nettverk->kobling[i]->dest->ruter_id);
+    // printf("AVLUS: Skriver kobling %d -> %d til fil ...\n",
+    //        data->nettverk->kobling[i]->kilde->ruter_id,
+    //        data->nettverk->kobling[i]->dest->ruter_id);
   }
 
   fflush(fil);

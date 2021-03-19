@@ -28,14 +28,14 @@ struct nettverk {
 struct database {
   int antall;
   struct nettverk * nettverk;
-  struct ruter * ruter; 
+  struct ruter * ruter[]; 
   // ^ flexible array member
 };
 
 
 /* FUNKSJONSDEKLARASJONER */
 
-struct ruter ruter(
+struct ruter * ruter(
     int ruter_id,
     unsigned char flagg,
     unsigned char prod_modell_len,
@@ -62,9 +62,15 @@ struct ruter * ruterid(int ruter_id, struct database * data);
 // TODO: Skrive om `strukt database` til å ha fleksibel ruter array av typen
 // `struct ruter * ruter[]`. Deretter allokere (og frigjøre minne) til hver
 // ruter, i stedet for i et stort jaffs.
-// - [ ] `struct database`
-// - [ ] `ruter(...)`
-// - [ ] `innlesing(...)`
-// - [ ] `free_database(...)`
-// - [ ] `printr(...)`
-// - [ ] %s/data->ruter[i]\./data->ruter[i]->/gc
+// - [x] `struct database`
+// - [x] `ruter(...)`
+// - [x] `innlesing(...)`
+// - [x] `free_database(...)`
+// - [x] `printr(...)`
+// - [x] %s/data->ruter[i]\./data->ruter[i]->/gc
+//
+// TODO: `utskrift(...)` kan skrives om til å skrive direkte til fil med
+//   `fwrite(..., sizeof(data->ruter[i]), ...)`
+// hvis til-/frakoblinger arrayene fjernes fra `struct ruter`.
+//
+// TODO: Fjerne `tilkoblinger` og `frakoblinger`, og finne en bedre løsning.
