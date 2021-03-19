@@ -12,7 +12,7 @@ INNLEVERING = $(BRUKERNAVN).tar.gz
 FLAGG       = -Wall -Wextra
 
 run: ruterdrift
-	./ruterdrift testing_data/5_routers_fully_connected/topology.dat
+	./ruterdrift testing_data/10_routers_15_edges/topology.dat testing_data/10_routers_15_edges/commands.txt
 
 all: $(OPPGAVER)
 

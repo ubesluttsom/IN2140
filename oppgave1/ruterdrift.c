@@ -9,42 +9,55 @@
 /* MAIN */
 
 int main(int argc, char* argv[]) {
-  if (argc != 2) {
+  if (argc < 2 || argc > 3) {
     if (argc < 2) printf("Error: Inputfil må spesifiseres. Avslutter ... \n");
-    if (argc > 2) printf("Error: Tar kun et argument. Avslutter ... \n");
+    if (argc > 3) printf("Error: Tar kun maks 2 argumenter. Avslutter ... \n");
     return EXIT_FAILURE;
   }
 
-  printf("Åpner fil: %s ... \n", argv[1]);
+  printf("... Åpner datafil: `%s` ... \n", argv[1]);
 
   char* filnavn = argv[1];
-  FILE* fil = fopen(filnavn, "r");
+  FILE* datafil = fopen(filnavn, "r");
 
-  if(!fil) {
-    printf("Error: Filåpning feilet!");
+  if (!datafil) {
+    printf("Error: Filåpning feilet!\n");
     return EXIT_FAILURE;
   }
 
-  struct database * data = innlesing(fil);
+  struct database * data = innlesing(datafil);
 
-  for (int i = 0; i < data->antall; ++i) {
-    printr(data->ruter[i]);
+  // for (int i = 0; i < data->antall; ++i) {
+  //   printr(data->ruter[i], data);
+  // }
+
+  // KOMMANDOFIL
+
+  printf("... Åpner kommandofil: `%s` ... \n", argv[2]);
+ 
+  char* filnavn2 = argv[2];
+  FILE* kommandofil = fopen(filnavn2, "r");
+
+  if (!kommandofil) {
+    printf("Error: Filåpning feilet!\n");
+    return EXIT_FAILURE;
   }
 
-  slett_ruter(ruterid(789, data), data);
-  slett_ruter(ruterid(865, data), data);
-  slett_ruter(ruterid(865, data), data);
+  kommandoer(data, kommandofil);
 
-  for (int i = 0; i < data->antall; ++i) {
-    printr(data->ruter[i]);
-  }
+  // SKRIV TIL FIL
 
-
-  printf("Prøver å skrive til fil ...\n");
+  printf("... Skriver til fil ...\n");
   FILE * utfil = fopen("new-topolopy.dat", "w");
   utskrift(data, utfil);
 
+  // AVSLUTT
+
+  printf("... Frigjør minne ...\n");
   free_database(data);
+
+  printf("... Avslutter ...\n");
+  return EXIT_SUCCESS;
 }
 
 
@@ -56,62 +69,32 @@ struct ruter * ruter(
     unsigned char flagg,
     unsigned char prod_modell_len,
     char *        prod_modell) {
+  printf("... Oppretter ruter %d ...\n", ruter_id);
   // Lager ny ruter struktur, noen variabler er null inntil videre.
   struct ruter * ny_ruter_peker = malloc(sizeof(struct ruter));
-  struct ruter ny_ruter = { ruter_id, flagg, prod_modell_len, {NULL}, {NULL}, {NULL} };
+  struct ruter ny_ruter = { ruter_id, flagg, prod_modell_len, {NULL} };
   memcpy(ny_ruter_peker, &ny_ruter, sizeof(struct ruter));
 
   // Kopierer over prod./mod. streng, byte for byte. Egentlig bare et innpakket
   // `strncpy` kall, men jeg får vel gjenbruke kode hvor jeg kan.
   sett_modell(ny_ruter_peker, prod_modell);
 
-  // Nuller ut til-/frakoblinger, vi kobler dem sammen senere.
-  for (int i = 0; i < 9; ++i) {
-    ny_ruter_peker->tilkoblinger[i] = NULL;
-    ny_ruter_peker->frakoblinger[i] = NULL;
-  }
-
   return ny_ruter_peker;
 }
 
 // Lager en kobling fra ruter `kilde` til ruter `dest`.
 int legg_til_kobling(struct ruter * kilde, struct ruter * dest, struct database * data) {
-  // Finner ledige «hull» i arrayene med koblinger.
-  int i = 0, j = 0;
-  for ( ; kilde->frakoblinger[i] != NULL; ++i) {
-    // Sjekker om vi har overskridet kapasiteten på 10 plasser.
-    if (i > 9) {
-      printf("Error: koblinger i ruter %d overfyldt! "
-             "Ignorerer kommando.\n", kilde->ruter_id);
-      return 0;
-    }
-  }
-  for ( ; dest->tilkoblinger[j] != NULL; ++j) {
-    if (j > 9) {
-      printf("Error: koblinger i ruter %d overfyldt! "
-             "Ignorerer kommando.\n", dest->ruter_id);
-      return 0;
-    }
-  }
-
-  // Setter inn `til` på den første ledige plassen som vi fant.
-  kilde->frakoblinger[i] = dest;
-  dest->tilkoblinger[j]  = kilde;
-
-
-  // LEGG TIL KOBLING I DATABASE
-
+  // Ser etter et «NULL-hull» i `kobling[]` hvor vi kan sette inn.
   for (int i = 0; i < data->nettverk->antall_max; ++i) {
-    if (data->nettverk->kobling[i] == NULL) {
-      data->nettverk->kobling[i] = malloc(sizeof(struct kobling));
-      data->nettverk->kobling[i]->kilde = kilde;
-      data->nettverk->kobling[i]->dest  = dest;
-      ++data->nettverk->antall;
-      printf("Legger til kobling %d -> %d i database. " 
-             "Totalt antall koblinger er nå %d.\n",
-             kilde->ruter_id, dest->ruter_id, data->nettverk->antall);
-      return 1;
-    }
+    if (data->nettverk->kobling[i] != NULL) 
+      continue;
+    data->nettverk->kobling[i] = malloc(sizeof(struct kobling));
+    data->nettverk->kobling[i]->kilde = kilde;
+    data->nettverk->kobling[i]->dest  = dest;
+    ++data->nettverk->antall;
+    printf("... Lager kobling %d -> %d. Antall koblinger %d ...\n",
+           kilde->ruter_id, dest->ruter_id, data->nettverk->antall);
+    return 1;
   }
 
   printf("Error: koblinger oppfyldt. Ignorerer kommando.\n");
@@ -119,13 +102,12 @@ int legg_til_kobling(struct ruter * kilde, struct ruter * dest, struct database 
 }
 
 // Printer ruterstrukturer
-void printr(struct ruter * ruter) {
-  if (ruter == NULL) {
+void printr(struct ruter * ruter, struct database * data) {
+  if (ruter == NULL)
     // Ignorerer helt hvis `ruter` er NULL, for at print i `for`-løkker skal
     // fungere (og ikke spamme error beskjeder).
     // printf("Error: ruter som forsøkes å skrives ut et NULL.\n");
     return;
-  }
 
   printf("Ruter-ID:\t%d\n",  ruter->ruter_id);
 
@@ -133,23 +115,19 @@ void printr(struct ruter * ruter) {
   printf("Flagg:\t\t%#x\n", ruter->flagg);
   printf(" - Er bruk:\t%s\n", (ruter->flagg & 1) ? "JA" : "NEI");
   printf(" - Trådløs:\t%s\n", (ruter->flagg & 2) ? "JA" : "NEI");
-  printf(" - 5 GHz:\t%s\n",   (ruter->flagg & 2) ? "JA" : "NEI");
+  printf(" - 5 GHz:\t%s\n",   (ruter->flagg & 4) ? "JA" : "NEI");
   printf(" - Endr.nr.:\t%d\n", ruter->flagg >> 4);
 
   printf("Prod./modell:\t%s\n", (char*) ruter->prod_modell);
 
-  printf("Tilkoblinger:\n");
-  for (int i = 0; i < 9; ++i) {
-    if (ruter->tilkoblinger[i] != NULL) {
-      printf(" <- %d\n", ruter->tilkoblinger[i]->ruter_id);
-    }
-  }
-
-  printf("Frakoblinger:\n");
-  for (int i = 0; i < 9; ++i) {
-    if (ruter->frakoblinger[i] != NULL) {
-      printf(" -> %d\n", ruter->frakoblinger[i]->ruter_id);
-    }
+  printf("Koblinger:\n");
+  for (int i = 0; i < data->nettverk->antall_max; ++i) {
+    if (data->nettverk->kobling[i] == NULL)
+      continue;
+    if (data->nettverk->kobling[i]->dest == ruter)
+      printf(" <- %d\n", data->nettverk->kobling[i]->kilde->ruter_id);
+    if (data->nettverk->kobling[i]->kilde == ruter)
+      printf(" -> %d\n", data->nettverk->kobling[i]->dest->ruter_id);
   }
 }
 
@@ -193,7 +171,7 @@ int slett_ruter(struct ruter * ruter, struct database * data) {
     return 0;
   }
 
-  // -----
+  printf("... Sletter ruter %d ...\n", ruter->ruter_id);
   
   for (int i = 0; i < data->nettverk->antall_max; ++i) {
     if (data->nettverk->kobling[i] == NULL)
@@ -206,36 +184,12 @@ int slett_ruter(struct ruter * ruter, struct database * data) {
     }
   }
 
-  // -----
-
-  // Nuller ut til-/frakoblinger.
-  for (int i = 0; i < 9; ++i) {
-    if (ruter->tilkoblinger[i] != NULL) {
-      for (int j = 0; j < 9; ++j) {
-        if (ruter->tilkoblinger[i]->frakoblinger[j] == ruter) {
-          ruter->tilkoblinger[i]->frakoblinger[j] = NULL;
-        }
-      }
-    }
-
-    if (ruter->frakoblinger[i] != NULL) {
-      for (int j = 0; j < 9; ++j) {
-        if (ruter->frakoblinger[i]->tilkoblinger[j] == ruter) {
-          ruter->frakoblinger[i]->tilkoblinger[j] = NULL;
-        }
-      }
-    }
-  }
-
   for (int i = 0; i < data->antall; ++i) {
     // Hvis `ruter` peker til samme sted som `data->ruter[i]` ...
     if (ruter == data->ruter[i]) {
-      // ... null ut denne ruteren.
-      printf("AVLUS: ...\n");
+      // ... frigjør minne og null ut pekeren.
       free(data->ruter[i]);
       data->ruter[i] = NULL;
-      // Trenger ikke frigjøre minnet, siden det ble allokert i en stor chunk
-      // med plass til ALLE ruterene som ble lest inn.
       return 1;
     }
   }
@@ -362,6 +316,51 @@ int utskrift(struct database * data, FILE * fil) {
   }
 
   fflush(fil);
+
+  return 1;
+}
+
+int kommandoer(struct database * data, FILE * fil) {
+
+  char linje[300];
+  char * kommando;
+  struct ruter * ruter;
+
+  while (fgets(linje, 300, fil) != NULL) {
+
+    printf("KOMMANDO: %s", linje);
+
+    kommando = strtok(linje, " \n");
+    ruter    = ruterid(atoi(strtok(NULL, " \n")), data);
+
+    // Tolker kommando. Her bruker jeg `strtok` for å hente ut argumenter. Jeg
+    // konverterer de `atoi` når jeg jeg trenger tall. Sekvensielle kall på
+    // `strtok` med `NULL` som argument fortsetter nedover på samme streng.
+    // Merk at jeg bruker litt forskjellige avgrensninger: « \n» vs. «\n».
+    if (strcmp(kommando, "print") == 0) {
+      printr(ruter, data);
+    } else if (strcmp(kommando, "slett_ruter") == 0) {
+      slett_ruter(ruter, data);
+    } else if (strcmp(kommando, "sett_modell") == 0) {
+      sett_modell(
+          ruter,
+          strtok(NULL, "\n"));
+    } else if (strcmp(kommando, "legg_til_kobling") == 0) {
+      legg_til_kobling(
+          ruter,
+          ruterid(atoi(strtok(NULL, " \n")), data),
+          data);
+    } else if (strcmp(kommando, "finnes_rute") == 0) {
+      printf("Error: `finnes_rute` kommando ikke implementert enda.\n");
+    } else if (strcmp(kommando, "sett_flagg") == 0) {
+      sett_flagg(
+          ruter,
+          atoi(strtok(NULL, " \n")),
+          atoi(strtok(NULL, " \n")));
+    } else {
+      printf("Error: ukjent kommando `%s`.\n", kommando);
+    }
+  }
 
   return 1;
 }
