@@ -1,4 +1,4 @@
-// Inkluderer ruterstuktur- og funksjonsdeklarasjon.
+// Inkluderer ruterstruktur- og funksjonsdeklarasjoner.
 #include "ruterdrift.h"
 // Standardbibliotek.
 #include <stdio.h>
@@ -30,10 +30,6 @@ int main(int argc, char* argv[])
 
   struct database * data = innlesing(datafil);
 
-  // for (int i = 0; i < data->rom; ++i) {
-  //   print(data->ruter[i], data);
-  // }
-
   // KOMMANDOFIL
 
   printf("... Åpner kommandofil: `%s` ... \n", argv[2]);
@@ -58,6 +54,9 @@ int main(int argc, char* argv[])
 
   printf("... Frigjør minne ...\n");
   free_database(data);
+  free(datafil);
+  free(kommandofil);
+  free(utfil);
 
   printf("... Avslutter ...\n");
   return EXIT_SUCCESS;
@@ -91,7 +90,7 @@ int legg_til_kobling(struct ruter * kilde, struct ruter * dest,
     return 1;
   }
 
-  printf("Error: koblinger oppfyldt. Ignorerer kommando.\n");
+  printf("Error: koblinger overfullt. Ignorerer kommando.\n");
   return 0;
 }
 
@@ -106,7 +105,7 @@ void print(struct ruter * ruter, struct database * data)
 
   printf("Ruter-ID:\t%d\n",  ruter->id);
 
-  // Printer flagg og gjør bit-oprerasjoner for å vise hva de betyr
+  // Printer flagg og gjør bit-operasjoner for å vise hva de betyr
   printf("Flagg:\t\t%#x\n", ruter->flagg);
   printf(" - Er bruk:\t%s\n", (ruter->flagg & 1) ? "JA" : "NEI");
   printf(" - Trådløs:\t%s\n", (ruter->flagg & 2) ? "JA" : "NEI");
@@ -187,7 +186,7 @@ int slett_ruter(struct ruter * ruter, struct database * data)
   for (int i = 0; i < data->rom; ++i) {
     // Hvis `ruter` peker til samme sted som `data->ruter[i]` ...
     if (ruter == data->ruter[i]) {
-      // ... frigjør minne, null ut pekeren og dekrementer antall.
+      // ... frigjør minne, null ut pekeren og senker antall.
       free(data->ruter[i]);
       data->ruter[i] = NULL;
       --data->antall;
@@ -215,13 +214,13 @@ struct ruter * ruter(
   memcpy(ny_ruter_peker, &ny_ruter, sizeof(struct ruter));
 
   // Kopierer over prod./mod. streng, byte for byte. Egentlig bare et innpakket
-  // `strncpy` kall, men jeg får vel gjenbruke kode hvor jeg kan.
+  // `strncpy` kall, men jeg får vel igjenbruke kode hvor jeg kan.
   sett_modell(ny_ruter_peker, prod_modell);
 
   return ny_ruter_peker;
 }
 
-// Frigjør allokert minne til datastrukruren.
+// Frigjør allokert minne til datastrukturen.
 int free_database(struct database * data)
 {
   for (int i = 0; i < data->rom; ++i) {
@@ -256,7 +255,7 @@ struct database * innlesing(FILE* fil)
   // RUTERE
 
   // Allokerer plass til antall rutere spesifisert i filen. Innleveringen
-  // definerer ingen komando for opprettelse av nye rutere, så vi kan være
+  // definerer ingen kommando for opprettelse av nye rutere, så vi kan være
   // sikre på at vi allokerer nok plass. `data->ruter` er en «flexible array
   // member», som vi tilpasser til «N», `antall_rutere`.
   int antall_rutere;
@@ -285,7 +284,7 @@ struct database * innlesing(FILE* fil)
 
   // NETTVERK
   
-  // Oppgaven spesifiserer at hver ruter ikke har fler enn 10 koblinger, vi
+  // Oppgaven spesifiserer at hver ruter ikke har flere enn 10 koblinger, vi
   // allokerer deretter.
   struct nettverk * nett = malloc(
       sizeof(int) +
@@ -315,11 +314,7 @@ struct database * innlesing(FILE* fil)
 // Skriver datastrukturer til fil.
 int utskrift(struct database * data, FILE * fil)
 {
-  // int faktisk_antall = 0;
-  // for (int i = 0; i < data->rom; ++i)
-  //   if (data->ruter[i] != NULL)
-  //     ++faktisk_antall;
-  fwrite(&data->antall, sizeof(int), 1, fil);
+  putw(data->antall, fil); 
 
   for (int i = 0; i < data->rom; ++i) {
     if (data->ruter[i] == NULL)
@@ -371,21 +366,23 @@ int kommandoer(struct database * data, FILE * fil)
     } else if (strcmp(kommando, "slett_ruter") == 0) {
       slett_ruter(ruter, data);
     } else if (strcmp(kommando, "sett_modell") == 0) {
-      sett_modell(
-          ruter,
-          strtok(NULL, "\n"));
+      sett_modell(ruter, strtok(NULL, "\n"));
     } else if (strcmp(kommando, "legg_til_kobling") == 0) {
-      legg_til_kobling(
-          ruter,
-          ruterid(atoi(strtok(NULL, " \n")), data),
-          data);
+      struct ruter * ruter2 = ruterid(atoi(strtok(NULL, " \n")), data);
+      legg_til_kobling(ruter, ruter2, data);
     } else if (strcmp(kommando, "finnes_rute") == 0) {
       printf("Error: `finnes_rute` kommando ikke implementert enda.\n");
     } else if (strcmp(kommando, "sett_flagg") == 0) {
-      sett_flagg(
-          ruter,
-          atoi(strtok(NULL, " \n")),
-          atoi(strtok(NULL, " \n")));
+      // Her fikk jeg først en rar lus: viser seg at min datamaskin og UiOs
+      // tjenere evaluerer flere uttrykk på samme linje i forskjellige
+      // retninger. Jeg satt egentlig uttrykkene for `flagg_bit` og `ny_verdi`
+      // rett inn i `sett_flagg(...)`, men siden `strtok` kallene blir
+      // forskjellig avhengig av rekkefølgen du evaluerer dem, fikk jeg
+      // forskjellige resultat mellom maskiner. Det er vel mer leselig og
+      // putte evalueringene utenfor funksjonskallet uansett ...
+      int flagg_bit = atoi(strtok(NULL, " \n"));
+      int ny_verdi  = atoi(strtok(NULL, " \n"));
+      sett_flagg(ruter, flagg_bit, ny_verdi);
     } else {
       printf("Error: ukjent kommando `%s`.\n", kommando);
     }
