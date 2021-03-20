@@ -2,56 +2,58 @@
 
 /* STRUKTURER */
 
+// Ruterstruktur, på akkurat samme format som i datafilene.
 struct ruter {
-  int ruter_id;
-  unsigned char flagg;
-  unsigned char prod_modell_len;
-  char * prod_modell[250];
-  // Koblinger mellom rutere. Siden «kantene» er ensrettet er konvensjonen min:
-  // `tilkoblinger` peker TIL ruteren, `frakoblinger` peker FRA.
-  struct ruter * tilkoblinger[10];
-  struct ruter * frakoblinger[10];
+  int id;                          // Ruterens unike ID.
+  unsigned char flagg;             // Flagg med bitvis informasjon.
+  unsigned char prod_modell_len;   // Lengde på beskrivelse.
+  char * prod_modell[250];         // Beskrivelse.
 };
 
+// Kobling. En abstraksjon for en enkelt kobling mellom to rutere.
 struct kobling {
-  struct ruter * kilde;
-  struct ruter * dest;
+  struct ruter * kilde;   // Ruter som koblingen fører FRA.
+  struct ruter * dest;    // Ruter som koblingen fører TIL.
 };
 
+// Nettverkstruktur. Holder informasjon om alle koblinger mellom rutere.
 struct nettverk {
-  int antall;
-  int antall_max;
-  struct kobling * kobling[];
+  int rom;                      // Koblinger det er plass til.
+  int antall;                   // Koblinger til en hver tid.
+  struct kobling * kobling[];   // Pekere til koblinger.
   // ^ flexible array member
 };
 
+// Database. En paraplystruktur som holder styr på all data under kjøring. På
+// denne måten er det enkelt sende en peker til denne databasen til en
+// funksjon, og funksjonen har så tilgang til all informasjon den skulle
+// trenge.
 struct database {
-  int antall;
-  struct nettverk * nettverk;
-  struct ruter * ruter[]; 
+  int rom;                      // Antall rutere det er rom til.
+  int antall;                   // Antall rutere til en hver tid.
+  struct nettverk * nettverk;   // Informasjon om koblinger.
+  struct ruter * ruter[];       // Pekere til alle rutere.
   // ^ flexible array member
 };
 
 
 /* FUNKSJONSDEKLARASJONER */
 
-struct ruter * ruter(
-    int ruter_id,
-    unsigned char flagg,
-    unsigned char prod_modell_len,
-    char * prod_modell);
-void printr(struct ruter * ruter);
-int legg_til_kobling(
-    struct ruter * kilde,
-    struct ruter * dest,
-    struct database * data);
+// Disse funksjonene er forklart i mer detalj i `ruterdrift.c`.
+
+struct ruter * ruter(int id, unsigned char flagg,
+                     unsigned char prod_modell_len, char * prod_modell);
+void print(struct ruter * ruter, struct database * data);
+int legg_til_kobling(struct ruter * kilde, struct ruter * dest,
+                     struct database * data);
 int sett_flagg(struct ruter * ruter, int flagg_bit, int ny_verdi);
 int sett_modell(struct ruter * ruter, char * ny_prod_modell);
 int slett_ruter(struct ruter * ruter, struct database * data);
 struct database * innlesing(FILE* fil);
 int utskrift(struct database * data, FILE * fil);
+int kommandoer(struct database * data, FILE * fil);
 int free_database(struct database * data);
-struct ruter * ruterid(int ruter_id, struct database * data);
+struct ruter * ruterid(int id, struct database * data);
 
 // TODO: Hjelpefunksjon som sjekker om det finnes en direkte kobling mellom to
 // rutere. Noe alla:
@@ -59,18 +61,6 @@ struct ruter * ruterid(int ruter_id, struct database * data);
 // Trenger uansett å lage en generell slik funksjon, som finner en «rute»
 // mellom to rutere generelt, uanhengig av ledd.
 //
-// TODO: Skrive om `strukt database` til å ha fleksibel ruter array av typen
-// `struct ruter * ruter[]`. Deretter allokere (og frigjøre minne) til hver
-// ruter, i stedet for i et stort jaffs.
-// - [x] `struct database`
-// - [x] `ruter(...)`
-// - [x] `innlesing(...)`
-// - [x] `free_database(...)`
-// - [x] `printr(...)`
-// - [x] %s/data->ruter[i]\./data->ruter[i]->/gc
-//
 // TODO: `utskrift(...)` kan skrives om til å skrive direkte til fil med
 //   `fwrite(..., sizeof(data->ruter[i]), ...)`
 // hvis til-/frakoblinger arrayene fjernes fra `struct ruter`.
-//
-// TODO: Fjerne `tilkoblinger` og `frakoblinger`, og finne en bedre løsning.
