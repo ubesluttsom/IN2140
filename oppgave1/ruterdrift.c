@@ -197,6 +197,15 @@ int slett_ruter(struct ruter * ruter, struct database * data)
   return 0;
 }
 
+finnes_rute(struct ruter * kilde, struct ruter * dest, struct database data)
+{
+  // BLERHG HVA ER DETTE? IN2010?!!1! lol. Jeg begynte på dette, men innså hvor
+  // styrete dette var i C ... Spesielt tilfellet hvor topologien er en SYKLISK
+  // rettet graf; jeg ser ikke uten videre en «lett» måte å implementere dette,
+  // uten en haug med stabler/arrayer, struct-er, pekere i mellom dem,
+  // hjelpfunksjoner, og andre vondter.
+}
+
 
 /* HJELPEFUNKSJONER */
 
