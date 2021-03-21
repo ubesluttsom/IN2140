@@ -1,11 +1,12 @@
 # Ok, så jeg innser at denne makefila er unødvendig innviklet, men det jo en
 # øvelsessak for meg, og jeg lærer mye av å gjøre det på denne måten.
 
-.PHONY: run valgrind all innlevering clean
+.PHONY: run valgrind all innlevering clean oppgave2
 
-OPPGAVER    = ruterdrift oppgave2
-OPPGAVE1    = oppgave1/ruterdrift.c
-OPPGAVE2    = oppgave2/oppgave2.md
+OPPGAVER    = oppgave1 oppgave2
+OPPGAVE1    = oppgave1/ruterdrift.c oppgave1/ruterdrift.h
+OPPGAVE2    = oppgave2/oppgave2.pdf
+MARKDOWN    = oppgave2/oppgave2-meta.md oppgave2/oppgave2.md
 BRUKERNAVN  = martimn
 KILDEKODE   = $(OPPGAVE1) $(OPPGAVE2) Makefile
 INNLEVERING = $(BRUKERNAVN).tar.gz
@@ -19,29 +20,28 @@ valgrind: ruterdrift
 
 all: $(OPPGAVER)
 
-ruterdrift: $(OPPGAVE1:.c=.o)
+oppgave1: $(OPPGAVE1)
 	# Kompilerer og linker `$@`
-	gcc $(FLAGG) $^ -o $@
+	gcc $(FLAGG) $< -o ruterdrift
 
-oppgave2: $(OPPGAVE2:.md=.pdf)
+oppgave2: $(OPPGAVE2)
 
-%.o: %.c
-	# Kompilerer objektfil `$@`
-	gcc $(FLAGG) -c $< -o $@
-
-%.pdf: %.md
+$(OPPGAVE2): $(MARKDOWN)
 	# Kompilerer pdf-fil fra markdown
-	pandoc $< -o $@
+	pandoc -Vlang:nb $(MARKDOWN) -o $@
 
-# innlevering: $(INNLEVERING)
+innlevering: $(INNLEVERING)
 
-# $(INNLEVERING): $(KILDEKODE)
-# 	rm -f $(INNLEVERING)
-# 	rm -f -r $(BRUKERNAVN)
-# 	mkdir $(BRUKERNAVN)
-# 	cp -r $(KILDEKODE) $(BRUKERNAVN)/
-# 	tar czf $(INNLEVERING) $(BRUKERNAVN)/
-# 
-# clean:
-# 	rm -f $(OPPGAVER) $(INNLEVERING) *.o
-# 	rm -f -r $(BRUKERNAVN) *.dSYM
+$(INNLEVERING): $(KILDEKODE)
+	rm -f $(INNLEVERING)
+	rm -f -r $(BRUKERNAVN)
+	mkdir $(BRUKERNAVN)
+	mkdir $(BRUKERNAVN)/oppgave1
+	mkdir $(BRUKERNAVN)/oppgave2
+	cp $(OPPGAVE1) $(BRUKERNAVN)/oppgave1/
+	cp $(OPPGAVE2) $(BRUKERNAVN)/oppgave2/
+	tar czf $(INNLEVERING) $(BRUKERNAVN)/
+
+clean:
+	rm -f $(INNLEVERING) oppgave1/*.o
+	rm -f -r $(BRUKERNAVN) *.dSYM
