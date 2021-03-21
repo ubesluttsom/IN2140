@@ -1,5 +1,7 @@
 // Inkluderer ruterstruktur- og funksjonsdeklarasjoner.
+// ANBEFALER Å LESE/RETTE DENNE FØRST.
 #include "ruterdrift.h"
+
 // Standardbibliotek.
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,8 +34,7 @@ int main(int argc, char* argv[])
 
   // KOMMANDOFIL
 
-  printf("... Åpner kommandofil: `%s` ... \n", argv[2]);
- 
+  printf("... Åpner kommandofil: `%s` ... \n", argv[2]); 
   char* filnavn2 = argv[2];
   FILE* kommandofil = fopen(filnavn2, "r");
 
@@ -54,9 +55,9 @@ int main(int argc, char* argv[])
 
   printf("... Frigjør minne ...\n");
   free_database(data);
-  free(datafil);
-  free(kommandofil);
-  free(utfil);
+  free(datafil);       // Avhengig av system. På IFI-tjenere må du frigjøre
+  free(kommandofil);   // disse, men på min maskin, eksempelvis, får jeg
+  free(utfil);         // feilmelding av å frigjøre `FILE*`-ene.
 
   printf("... Avslutter ...\n");
   return EXIT_SUCCESS;
@@ -64,35 +65,6 @@ int main(int argc, char* argv[])
 
 
 /* KOMMANDOER */
-
-// Lager en kobling fra ruter `kilde` til ruter `dest`.
-int legg_til_kobling(struct ruter * kilde, struct ruter * dest,
-                     struct database * data)
-{
-  if (kilde == NULL || dest == NULL) {
-    if (kilde == NULL) printf("Error: kan ikke opprette kobling; "
-                              "koblingskilden finnes ikke.\n");
-    if (dest  == NULL) printf("Error: kan ikke opprette kobling; "
-                              "koblingsdestinasjon finnes ikke.\n");
-    return 0;
-  }
-
-  // Ser etter et «NULL-hull» i `kobling[]` hvor vi kan sette inn.
-  for (int i = 0; i < data->nettverk->rom; ++i) {
-    if (data->nettverk->kobling[i] != NULL) 
-      continue;
-    data->nettverk->kobling[i] = malloc(sizeof(struct kobling));
-    data->nettverk->kobling[i]->kilde = kilde;
-    data->nettverk->kobling[i]->dest  = dest;
-    ++data->nettverk->antall;
-    printf("... Lager kobling %d -> %d. Antall koblinger %d ...\n",
-           kilde->id, dest->id, data->nettverk->antall);
-    return 1;
-  }
-
-  printf("Error: koblinger overfullt. Ignorerer kommando.\n");
-  return 0;
-}
 
 // Printer ruterstrukturer
 void print(struct ruter * ruter, struct database * data)
@@ -123,6 +95,36 @@ void print(struct ruter * ruter, struct database * data)
     if (data->nettverk->kobling[i]->kilde == ruter)
       printf(" -> %d\n", data->nettverk->kobling[i]->dest->id);
   }
+}
+
+// Lager en kobling fra ruter `kilde` til ruter `dest`. Koblingen lagres i
+// «nettverksstrukturen» i databasen `data`.
+int legg_til_kobling(struct ruter * kilde, struct ruter * dest,
+                     struct database * data)
+{
+  if (kilde == NULL || dest == NULL) {
+    if (kilde == NULL) printf("Error: kan ikke opprette kobling; "
+                              "koblingskilden finnes ikke.\n");
+    if (dest  == NULL) printf("Error: kan ikke opprette kobling; "
+                              "koblingsdestinasjon finnes ikke.\n");
+    return 0;
+  }
+
+  // Ser etter et «NULL-hull» i `kobling[]` hvor vi kan sette inn.
+  for (int i = 0; i < data->nettverk->rom; ++i) {
+    if (data->nettverk->kobling[i] != NULL) 
+      continue;
+    data->nettverk->kobling[i] = malloc(sizeof(struct kobling));
+    data->nettverk->kobling[i]->kilde = kilde;
+    data->nettverk->kobling[i]->dest  = dest;
+    ++data->nettverk->antall;
+    printf("... Lager kobling %d -> %d. Antall koblinger %d ...\n",
+           kilde->id, dest->id, data->nettverk->antall);
+    return 1;
+  }
+
+  printf("Error: koblinger overfullt. Ignorerer kommando.\n");
+  return 0;
 }
 
 // Setter endrer på flagget i ruter. Gjør dette ved å sette et gitt
@@ -158,7 +160,7 @@ int sett_flagg(struct ruter * ruter, int flagg_bit, int ny_verdi)
 int sett_modell(struct ruter * ruter, char * ny_prod_modell)
 {
   strncpy((char *) ruter->prod_modell, ny_prod_modell, 249);
-  ruter->prod_modell_len = (unsigned char) strlen(ny_prod_modell);
+  ruter->prod_modell_len = (unsigned char) strlen(ruter->prod_modell);
   return 0;
 }
 
@@ -172,12 +174,14 @@ int slett_ruter(struct ruter * ruter, struct database * data)
 
   printf("... Sletter ruter %d ...\n", ruter->id);
   
+  // Sletter (og figjør minne til) alle koblingene i nettverket som enten går
+  // til eller fra `ruter`.
   for (int i = 0; i < data->nettverk->rom; ++i) {
     if (data->nettverk->kobling[i] == NULL)
       continue;
     else if (data->nettverk->kobling[i]->kilde == ruter
         || data->nettverk->kobling[i]->dest == ruter) {
-      free(data->nettverk->kobling[i]);
+      free(data->nettverk->kobling[i]);   // Allokert når opprettet koblingen.
       data->nettverk->kobling[i] = NULL;
       --data->nettverk->antall;
     }
@@ -199,11 +203,11 @@ int slett_ruter(struct ruter * ruter, struct database * data)
 
 finnes_rute(struct ruter * kilde, struct ruter * dest, struct database data)
 {
-  // BLERHG HVA ER DETTE? IN2010?!!1! lol. Jeg begynte på dette, men innså hvor
+  // BLRGH HVA ER DETTE? IN2010?!!1! lol. Jeg begynte på dette, men innså hvor
   // styrete dette var i C ... Spesielt tilfellet hvor topologien er en SYKLISK
-  // rettet graf; jeg ser ikke uten videre en «lett» måte å implementere dette,
-  // uten en haug med stabler/arrayer, struct-er, pekere i mellom dem,
-  // hjelpfunksjoner, og andre vondter.
+  // rettet graf; jeg ser ikke uten videre en «lett» måte å implementere dette
+  // skikkelig, uten en haug med stabler/arrayer, struct-er, pekere i mellom
+  // dem, hjelpfunksjoner, og andre vondter.
 }
 
 
@@ -232,12 +236,17 @@ struct ruter * ruter(
 // Frigjør allokert minne til datastrukturen.
 int free_database(struct database * data)
 {
+  // Å kalle `free(NULL)` gjør ingenting, i følge manualen, så vi gidder
+  // ikke sjekke om det faktisk er noe på plassene i arrayene.
   for (int i = 0; i < data->rom; ++i) {
+    // Alle disse ble allokert ved oppretelsen av ruterne i `ruter(...)`.
     free(data->ruter[i]);
   }
   for (int i = 0; i < data->nettverk->rom; ++i) {
+    // Alle koblingene ble allokert i `legg_til_kobling(...)`.
     free(data->nettverk->kobling[i]);
   }
+  // Disse paraplystrukturene ble allokert i `innlesing(...)`.
   free(data->nettverk);
   free(data);
   return 0;
@@ -367,7 +376,7 @@ int kommandoer(struct database * data, FILE * fil)
     ruter    = ruterid(atoi(strtok(NULL, " \n")), data);
 
     // Tolker kommando. Her bruker jeg `strtok` for å hente ut argumenter. Jeg
-    // konverterer de `atoi` når jeg jeg trenger tall. Sekvensielle kall på
+    // konverterer de med `atoi` når jeg jeg trenger tall. Sekvensielle kall på
     // `strtok` med `NULL` som argument fortsetter nedover på samme streng.
     // Merk at jeg bruker litt forskjellige avgrensninger: « \n» vs. «\n».
     if (strcmp(kommando, "print") == 0) {

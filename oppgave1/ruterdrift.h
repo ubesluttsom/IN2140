@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+
 /* STRUKTURER */
 
 // Ruterstruktur, på akkurat samme format som i datafilene.
