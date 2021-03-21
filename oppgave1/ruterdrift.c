@@ -160,7 +160,7 @@ int sett_flagg(struct ruter * ruter, int flagg_bit, int ny_verdi)
 int sett_modell(struct ruter * ruter, char * ny_prod_modell)
 {
   strncpy((char *) ruter->prod_modell, ny_prod_modell, 249);
-  ruter->prod_modell_len = (unsigned char) strlen(ruter->prod_modell);
+  ruter->prod_modell_len = (unsigned char) strlen((char *) ruter->prod_modell);
   return 0;
 }
 
@@ -201,7 +201,8 @@ int slett_ruter(struct ruter * ruter, struct database * data)
   return 0;
 }
 
-finnes_rute(struct ruter * kilde, struct ruter * dest, struct database data)
+/*
+int finnes_rute(struct ruter * kilde, struct ruter * dest, struct database data)
 {
   // BLRGH HVA ER DETTE? IN2010?!!1! lol. Jeg begynte på dette, men innså hvor
   // styrete dette var i C ... Spesielt tilfellet hvor topologien er en SYKLISK
@@ -209,6 +210,7 @@ finnes_rute(struct ruter * kilde, struct ruter * dest, struct database data)
   // skikkelig, uten en haug med stabler/arrayer, struct-er, pekere i mellom
   // dem, hjelpfunksjoner, og andre vondter.
 }
+*/
 
 
 /* HJELPEFUNKSJONER */
