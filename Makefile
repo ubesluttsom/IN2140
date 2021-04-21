@@ -11,7 +11,7 @@ FLAGG       = -Wall -Wextra -g -std=gnu11
 all: klient server
 
 run: server
-	./server
+	./server 2021
 
 # valgrind: klient server
 # 	valgrind --leak-check=full --show-leak-kinds=all XXXXXXX
