@@ -8,6 +8,9 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+// RDP definisjon
+#include "rdp.h"
+
 
 /* MAIN */
 
@@ -58,7 +61,7 @@ int main(int argc, char* argv[])
   while(1) {
     sleep(1);
 
-    char buf[1000];
+    void *buf[sizeof(struct rdp) + 1];
     memset(&buf, '\0', sizeof buf);
     struct sockaddr_storage from;
     memset(&from, '\0', sizeof from);
@@ -67,7 +70,8 @@ int main(int argc, char* argv[])
     int recv;
     if ((recv = recvfrom(sokk, buf, sizeof buf, 0,(struct sockaddr *) &from, &fromlen)) > 0) {
       buf[recv] = '\0';
-      printf("RECV: %d bytes «%s»\n", recv, buf);
+      printf("RECV: %d bytes: ", recv);
+      printrdp(&buf);
     } else {
       printf("RECV: %s\n", strerror(errno));
       // return EXIT_FAILURE;

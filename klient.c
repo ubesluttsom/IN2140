@@ -8,18 +8,22 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+// RDP definisjon
+#include "rdp.h"
+
 
 /* MAIN */
 
 int main(int argc, char* argv[])
 {
-  if (argc != 2) {
-    printf("Feil antall argumenter: per nå kun implementert for 2:\n");
-    printf("usage: %s <port>\n", argv[0]);
+  if (argc != 3) {
+    printf("Feil antall argumenter: per nå kun implementert for 3:\n");
+    printf("usage: %s <IP/vertsnavn til server> <port>\n", argv[0]);
     return EXIT_FAILURE;
   }
 
-  char* port = argv[1];
+  char* vert = argv[1];
+  char* port = argv[2];
 
   printf("Starter klient.\n");
 
@@ -29,12 +33,12 @@ int main(int argc, char* argv[])
   struct addrinfo hints, *res;
 
   memset(&hints, '\0', sizeof hints); // sikrer oss mot tilfelige problemer
-  hints.ai_family   = AF_INET;      // ~~spesifierer ikke IP versjon~~ bruker IPv4
-  hints.ai_socktype = SOCK_DGRAM;    // vi ønsker typen «datagram», for UDP
+  hints.ai_family   = AF_UNSPEC;      // spesifierer ikke IP versjon
+  hints.ai_socktype = SOCK_DGRAM;     // vi ønsker typen «datagram», for UDP
   hints.ai_flags    = AI_PASSIVE;     // bruker addresen til den lokale maskinen
 
   int error;
-  if ((error = getaddrinfo(NULL, port, &hints, &res)) != 0) {
+  if ((error = getaddrinfo(vert, port, &hints, &res)) != 0) {
     printf("GETADDRINFO(): %s\n", gai_strerror(error));
     return EXIT_FAILURE;
   }
@@ -55,16 +59,27 @@ int main(int argc, char* argv[])
   // }
 
 
-  // SEND MELDING.
+  // SEND RDP-PAKKE
+  
+  struct rdp pakke;
+  pakke.flag = 0x04;
+  pakke.pktseq = 0x0;
+  pakke.ackseq = 0x0;
+  pakke.unassigned = 0x0;
+  pakke.senderid = 0x0;
+  pakke.recvid = 0x0;
+  pakke.metadata = 0x0;
+  memset(pakke.payload, '\0', sizeof(pakke.payload));
+  memcpy(pakke.payload, "Heisann.", 8);
 
-  void *buf = "Heisann.";
+  // void buf[sizeof(struct rdp)];
   struct addrinfo *to;
   to = res;
   // memset(&to, '\0', sizeof to);
   // unsigned int tolen = sizeof to;
 
   int sendt;
-  if ((sendt = sendto(sokk, buf, sizeof buf, 0, to->ai_addr, to->ai_addrlen)) > 0) {
+  if ((sendt = sendto(sokk, (void *) &pakke, sizeof pakke, 0, to->ai_addr, to->ai_addrlen)) > 0) {
     printf("SENDTO: sendte %d bytes\n", sendt);
   } else {
     printf("SENDTO: %s\n", strerror(errno));

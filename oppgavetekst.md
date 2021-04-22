@@ -52,33 +52,39 @@ Den sender den samme store filen til alle disse klientene. Du kan velge om NewFS
 
 RDP-protokollformatet for transportlaget ditt må være følgende:
 
-+-----------------+--------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| Datatype        | Navn (forslagsvis) | Beskrivelse                                                                                                                                                   |
-+-----------------+--------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| `unsigned char` | `flag`             | Flagg som definerer forskjellige typer pakker.                                                                                                                |
-|                 |                    | - Hvis `flag==0x01`, så er denne pakken en forbindelsesforespørsel.                                                                                           |
-|                 |                    | - Hvis `flag==0x02`, så er denne pakken en forbindelsesavslutning.                                                                                            |
-|                 |                    | - Hvis `flag==0x04`, så inneholder denne pakken data.                                                                                                         |
-|                 |                    | - Hvis `flag==0x08`, så er denne pakken en ACK.                                                                                                               |
-|                 |                    | - Hvis `flag==0x10`, så aksepterer denne pakken en forbindelsesforespørsel.                                                                                   |
-|                 |                    | - Hvis `flag==0x20`, så avslår denne pakken en forbindelsesforespørsel.                                                                                       |
-+-----------------+--------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| `usignert char` | `pktseq`           | Sekvensnummer pakke                                                                                                                                           |
-+-----------------+--------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| `usignert char` | `ackseq`           | Sekvensnummer ACK-ed av pakke                                                                                                                                 |
-+-----------------+--------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| `usignert char` | `unassigned`       | Ubrukt, det vil si alltid 0                                                                                                                                   |
-+-----------------+--------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| `int`           | `senderid`         | Avsenderens forbindelses-ID i nettverksbyterekkefølge                                                                                                         |
-+-----------------+--------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| `int`           | `recvid`           | Mottakerens forbindelses-ID i nettverksbyterekkefølge                                                                                                         |
-+-----------------+--------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| `int`           | `metadata`         | Heltallsverdi i nettverksbyterekkefølge der tolkningen avhenger av verdien av flagg                                                                           |
-|                 |                    | - Hvis `flag==0x04`, så gir metadata den totale lengden på pakken, inkludert nyttelasten, i bytes.                                                            |
-|                 |                    | - Hvis `flag==0x20`, så gir metadata en heltallsverdi som indikerer årsaken til å avslå forbindelsesforespørselen. Du velger betydningen av disse feilkodene. |
-+-----------------+--------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| bytes           | `payload`          | Nyttelast, det vil si antall bytes som er angitt med forrige heltall, men aldri mer enn 1000 bytes. Nyttelast er bare inkludert i pakken hvis `flag==0x04`.   |
-+-----------------+--------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
++-----------------+--------------------+-----------------------------------------------------------------------------+
+| Datatype        | Navn (forslagsvis) | Beskrivelse                                                                 |
++-----------------+--------------------+-----------------------------------------------------------------------------+
+| `unsigned char` | `flag`             | Flagg som definerer forskjellige typer pakker.                              |
+|                 |                    | - Hvis `flag==0x01`, så er denne pakken en forbindelsesforespørsel.         |
+|                 |                    | - Hvis `flag==0x02`, så er denne pakken en forbindelsesavslutning.          |
+|                 |                    | - Hvis `flag==0x04`, så inneholder denne pakken data.                       |
+|                 |                    | - Hvis `flag==0x08`, så er denne pakken en ACK.                             |
+|                 |                    | - Hvis `flag==0x10`, så aksepterer denne pakken en forbindelsesforespørsel. |
+|                 |                    | - Hvis `flag==0x20`, så avslår denne pakken en forbindelsesforespørsel.     |
++-----------------+--------------------+-----------------------------------------------------------------------------+
+| `usignert char` | `pktseq`           | Sekvensnummer pakke                                                         |
++-----------------+--------------------+-----------------------------------------------------------------------------+
+| `usignert char` | `ackseq`           | Sekvensnummer ACK-ed av pakke                                               |
++-----------------+--------------------+-----------------------------------------------------------------------------+
+| `usignert char` | `unassigned`       | Ubrukt, det vil si alltid 0                                                 |
++-----------------+--------------------+-----------------------------------------------------------------------------+
+| `int`           | `senderid`         | Avsenderens forbindelses-ID i nettverksbyterekkefølge                       |
++-----------------+--------------------+-----------------------------------------------------------------------------+
+| `int`           | `recvid`           | Mottakerens forbindelses-ID i nettverksbyterekkefølge                       |
++-----------------+--------------------+-----------------------------------------------------------------------------+
+| `int`           | `metadata`         | Heltallsverdi i nettverksbyterekkefølge der tolkningen avhenger av          |
+|                 |                    | verdien av flagg                                                            |
+|                 |                    | - Hvis `flag==0x04`, så gir metadata den totale lengden på pakken,          |
+|                 |                    |   inkludert nyttelasten, i bytes.                                           |
+|                 |                    | - Hvis `flag==0x20`, så gir metadata en heltallsverdi som indikerer         |
+|                 |                    |   årsaken til å avslå forbindelsesforespørselen. Du velger betydningen      |
+|                 |                    |   av disse feilkodene.                                                      |
++-----------------+--------------------+-----------------------------------------------------------------------------+
+| bytes           | `payload`          | Nyttelast, det vil si antall bytes som er angitt med forrige heltall,       |
+|                 |                    | men aldri mer enn 1000 bytes. Nyttelast er bare inkludert i pakken          |
+|                 |                    | hvis `flag==0x04`.                                                          |
++-----------------+--------------------+-----------------------------------------------------------------------------+
 
 Merknader:
 * I hver pakke kan bare én av bitene i flags settes til 1. Hvis du mottar en pakke der dette ikke stemmer, kast den.
