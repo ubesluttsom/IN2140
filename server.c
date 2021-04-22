@@ -30,7 +30,7 @@ int main(int argc, char* argv[])
 
   memset(&hints, '\0', sizeof hints); // sikrer oss mot tilfelige problemer
   hints.ai_family   = AF_UNSPEC;   // spesifierer ikke IP versjon
-  hints.ai_socktype = SOCK_STREAM;  // vi ønsker typen «datagram», for UDP
+  hints.ai_socktype = SOCK_DGRAM;  // vi ønsker typen «datagram», for UDP
   hints.ai_flags    = AI_PASSIVE;  // bruker addresen til den lokale maskinen
 
   int error;
@@ -50,15 +50,30 @@ int main(int argc, char* argv[])
   if (bind(sokk, res->ai_addr, res->ai_addrlen) == 0) {
     printf("BIND: suksess\n");
   } else {
-    printf("BIND: feilet\n");
+    printf("BIND: %s\n", strerror(errno));
     return EXIT_FAILURE;
   }
 
-  for (int i = 10; i > 0; --i) {
+  printf("LYTTER PÅ PORT %s\n", port);
+  while(1) {
     sleep(1);
-    printf("Lytter på %s.\n", port);
+
+    char buf[1000];
+    memset(&buf, '\0', sizeof buf);
+    struct sockaddr_storage from;
+    memset(&from, '\0', sizeof from);
+    unsigned int fromlen = sizeof from;
+
+    int recv;
+    if ((recv = recvfrom(sokk, buf, sizeof buf, 0,(struct sockaddr *) &from, &fromlen)) > 0) {
+      buf[recv] = '\0';
+      printf("RECV: %d bytes «%s»\n", recv, buf);
+    } else {
+      printf("RECV: %s\n", strerror(errno));
+      // return EXIT_FAILURE;
+    }
+
   }
-  printf("Timeout. Avslutter.\n");
 
   // FRIGJØR MINNE
 
