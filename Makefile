@@ -13,8 +13,8 @@ all: klient server
 run: server
 	./server 2021
 
-# valgrind: klient server
-# 	valgrind --leak-check=full --show-leak-kinds=all XXXXXXX
+valgrind: klient server
+	valgrind --leak-check=full --show-leak-kinds=all --trace-children=yes ./server 2021
 
 klient: $(KLIENT)
 	# Kompilerer og linker `$@`

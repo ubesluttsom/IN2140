@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
 {
   if (argc != 2) {
     printf("Feil antall argumenter: per nå kun implementert for 2:\n");
-    printf("usage: server <port>\n");
+    printf("usage: %s <port>\n", argv[0]);
     return EXIT_FAILURE;
   }
 
@@ -28,9 +28,9 @@ int main(int argc, char* argv[])
 
   struct addrinfo hints, *res;
 
-  memset(&hints, 0, sizeof hints); // sikrer oss mot tilfelige problemer
+  memset(&hints, '\0', sizeof hints); // sikrer oss mot tilfelige problemer
   hints.ai_family   = AF_UNSPEC;   // spesifierer ikke IP versjon
-  hints.ai_socktype = SOCK_DGRAM;  // vi ønsker typen «datagram», for UDP
+  hints.ai_socktype = SOCK_STREAM;  // vi ønsker typen «datagram», for UDP
   hints.ai_flags    = AI_PASSIVE;  // bruker addresen til den lokale maskinen
 
   int error;
@@ -54,11 +54,11 @@ int main(int argc, char* argv[])
     return EXIT_FAILURE;
   }
 
-  while (1) {
+  for (int i = 10; i > 0; --i) {
     sleep(1);
     printf("Lytter på %s.\n", port);
   }
-
+  printf("Timeout. Avslutter.\n");
 
   // FRIGJØR MINNE
 
