@@ -12,6 +12,7 @@ struct rdp {
 struct rdp_connection {  
   // AKA. en slags RDP socket.
   int sockfd;
+  struct addrinfo *addr;
 };
 
 int rdp_print(struct rdp *pakke);
@@ -19,5 +20,5 @@ int rdp_print(struct rdp *pakke);
 struct rdp_connection * rdp_accept();
 int                     rdp_write(struct rdp_connection *token);
 int                     rdp_read(struct rdp_connection *token);
-struct rdp_connection * rdp_connect(char *port);
+struct rdp_connection * rdp_connect(char* vert, char *port);
 int                     rdp_close(struct rdp_connection *token);

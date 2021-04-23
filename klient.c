@@ -27,37 +27,42 @@ int main(int argc, char* argv[])
 
   printf("Starter klient.\n");
 
-  // Kobler en socket til tjener-port. Jeg har lent meg på denne guiden:
-  // <https://beej.us/guide/bgnet/html/index-wide.html>
+//  // Kobler en socket til tjener-port. Jeg har lent meg på denne guiden:
+//  // <https://beej.us/guide/bgnet/html/index-wide.html>
+//
+//  struct addrinfo hints, *res;
+//
+//  memset(&hints, '\0', sizeof hints); // sikrer oss mot tilfelige problemer
+//  hints.ai_family   = AF_UNSPEC;      // spesifierer ikke IP versjon
+//  hints.ai_socktype = SOCK_DGRAM;     // vi ønsker typen «datagram», for UDP
+//  hints.ai_flags    = AI_PASSIVE;     // bruker addresen til den lokale maskinen
+//
+//  int error;
+//  if ((error = getaddrinfo(vert, port, &hints, &res)) != 0) {
+//    printf("GETADDRINFO(): %s\n", gai_strerror(error));
+//    return EXIT_FAILURE;
+//  }
+//
+//  int sokk;
+//  if ((sokk = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) != -1) {
+//    printf("SOCKET: %d\n", sokk);
+//  } else {
+//    printf("SOCKET: %s\n", strerror(errno));
+//    return EXIT_FAILURE;
+//  }
+//
+//  // if (bind(sokk, res->ai_addr, res->ai_addrlen) == 0) {
+//  //   printf("BIND: suksess\n");
+//  // } else {
+//  //   printf("BIND: %s\n", strerror(errno));
+//  //   return EXIT_FAILURE;
+//  // }
 
-  struct addrinfo hints, *res;
-
-  memset(&hints, '\0', sizeof hints); // sikrer oss mot tilfelige problemer
-  hints.ai_family   = AF_UNSPEC;      // spesifierer ikke IP versjon
-  hints.ai_socktype = SOCK_DGRAM;     // vi ønsker typen «datagram», for UDP
-  hints.ai_flags    = AI_PASSIVE;     // bruker addresen til den lokale maskinen
-
-  int error;
-  if ((error = getaddrinfo(vert, port, &hints, &res)) != 0) {
-    printf("GETADDRINFO(): %s\n", gai_strerror(error));
+  struct rdp_connection *session = rdp_connect(vert, port);
+  if (session == NULL) {
+    printf("RDP: klarte ikke opprette forbindelse\n");
     return EXIT_FAILURE;
   }
-
-  int sokk;
-  if ((sokk = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) != -1) {
-    printf("SOCKET: %d\n", sokk);
-  } else {
-    printf("SOCKET: %s\n", strerror(errno));
-    return EXIT_FAILURE;
-  }
-
-  // if (bind(sokk, res->ai_addr, res->ai_addrlen) == 0) {
-  //   printf("BIND: suksess\n");
-  // } else {
-  //   printf("BIND: %s\n", strerror(errno));
-  //   return EXIT_FAILURE;
-  // }
-
 
   // SEND RDP-PAKKE
   
@@ -74,12 +79,12 @@ int main(int argc, char* argv[])
 
   // void buf[sizeof(struct rdp)];
   struct addrinfo *to;
-  to = res;
+  to = session->addr;
   // memset(&to, '\0', sizeof to);
   // unsigned int tolen = sizeof to;
 
   int sendt;
-  if ((sendt = sendto(sokk, (void *) &pakke, sizeof pakke, 0, to->ai_addr, to->ai_addrlen)) > 0) {
+  if ((sendt = sendto(session->sockfd, (void *) &pakke, sizeof pakke, 0, to->ai_addr, to->ai_addrlen)) > 0) {
     printf("SENDTO: sendte %d bytes\n", sendt);
   } else {
     printf("SENDTO: %s\n", strerror(errno));
@@ -89,7 +94,7 @@ int main(int argc, char* argv[])
 
   // FRIGJØR MINNE
 
-  freeaddrinfo(res);
+  rdp_close(session);
 
   return 1;
 }

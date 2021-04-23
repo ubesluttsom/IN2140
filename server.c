@@ -26,7 +26,11 @@ int main(int argc, char *argv[])
 
   printf("Starter server.\n");
 
-  struct rdp_connection *session = rdp_connect(port);
+  struct rdp_connection *session = rdp_connect(NULL, port);
+  if (session == NULL) {
+    printf("RDP: klarte ikke opprette forbindelse\n");
+    return EXIT_FAILURE;
+  }
 
   printf("LYTTER PÅ PORT %s\n", port);
   while(1) {
@@ -47,8 +51,11 @@ int main(int argc, char *argv[])
       printf("RECV: %s\n", strerror(errno));
       // return EXIT_FAILURE;
     }
-
   }
+
+  // FRIGJØR MINNE
+
+  rdp_close(session);
 
   return 1;
 }
