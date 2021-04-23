@@ -62,13 +62,13 @@ int main(int argc, char* argv[])
   // SEND RDP-PAKKE
   
   struct rdp pakke;
-  pakke.flag = 0x04;
-  pakke.pktseq = 0x0;
-  pakke.ackseq = 0x0;
+  pakke.flag       = 0x04;
+  pakke.pktseq     = 0x0;
+  pakke.ackseq     = 0x0;
   pakke.unassigned = 0x0;
-  pakke.senderid = 0x0;
-  pakke.recvid = 0x0;
-  pakke.metadata = 0x0;
+  pakke.senderid   = 0x0;
+  pakke.recvid     = 0x0;
+  pakke.metadata   = 0x0;
   memset(pakke.payload, '\0', sizeof(pakke.payload));
   memcpy(pakke.payload, "Heisann.", 8);
 

@@ -1,28 +1,29 @@
 .PHONY: run valgrind all innlevering clean
 
 PREKODE = send_packet.c send_packet.h
-KLIENT = klient.c $(PREKODE)
-SERVER = server.c $(PREKODE)
+RDP     = rdp.c rdp.h
+KLIENT  = klient.c $(PREKODE) $(RDP)
+SERVER  = server.c $(PREKODE) $(RDP)
+BIN     = server klient
 
-KANDIDATNUM  = xxxxxxx
+FLAGG = -Wall -Wextra -g -std=gnu11
+
+KANDIDATNUM = xxxxxxx
 INNLEVERING = $(KANDIDATNUM).tar.gz
-FLAGG       = -Wall -Wextra -g -std=gnu11
 
-all: klient server
+all: server klient
+
+klient: $(KLIENT)
+server: $(SERVER)
+$(BIN):
+	# Kompilerer og linker `$@`
+	gcc $(FLAGG) $(filter %.c, $^) -o $@
 
 run: server
 	./server 2021
 
-valgrind: klient server
+valgrind: $(BIN)
 	valgrind --leak-check=full --show-leak-kinds=all --trace-children=yes ./server 2021
-
-klient: $(KLIENT)
-	# Kompilerer og linker `$@`
-	gcc $(FLAGG) $< -o klient
-
-server: $(SERVER)
-	# Kompilerer og linker `$@`
-	gcc $(FLAGG) $< -o server
 
 innlevering: $(INNLEVERING)
 
@@ -36,5 +37,6 @@ $(INNLEVERING): $(KILDEKODE)
 	tar czf $(INNLEVERING) $(KANDIDATNUM)/
 
 clean:
+	rm -f server klient
 	rm -f $(INNLEVERING) *.o
 	rm -f -r $(KANDIDATNUM) *.dSYM

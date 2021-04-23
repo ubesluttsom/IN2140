@@ -9,14 +9,15 @@ struct rdp {
   unsigned char       payload[1000];
 };
 
-int printrdp(struct rdp *pakke) {
-  printf("{ flag==%x, pktseq==%x, ackseq==%x, senderid==%x, recvid==%x, metadata==%x, payload==\"%s\" }\n",
-         pakke->flag,
-         pakke->pktseq,
-         pakke->ackseq,
-         pakke->senderid,
-         pakke->recvid,
-         pakke->metadata,
-         pakke->payload);
-  return 1;
-}
+struct rdp_connection {  
+  // AKA. en slags RDP socket.
+  int sockfd;
+};
+
+int rdp_print(struct rdp *pakke);
+
+struct rdp_connection * rdp_accept();
+int                     rdp_write(struct rdp_connection *token);
+int                     rdp_read(struct rdp_connection *token);
+struct rdp_connection * rdp_connect(char *port);
+int                     rdp_close(struct rdp_connection *token);
