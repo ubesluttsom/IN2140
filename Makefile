@@ -19,8 +19,8 @@ $(BIN):
 	# Kompilerer og linker `$@`
 	gcc $(FLAGG) $(filter %.c, $^) -o $@
 
-run: server
-	./server 2021
+run: klient
+	./klient ::1 2021
 
 valgrind: $(BIN)
 	valgrind --leak-check=full --show-leak-kinds=all --trace-children=yes ./server 2021

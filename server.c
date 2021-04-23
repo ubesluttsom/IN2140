@@ -34,28 +34,12 @@ int main(int argc, char *argv[])
 
   printf("LYTTER PÅ PORT %s\n", port);
   while(1) {
-    sleep(1);
-
-    void *buf[sizeof(struct rdp) + 1];
-    memset(&buf, '\0', sizeof buf);
-    struct sockaddr_storage from;
-    memset(&from, '\0', sizeof from);
-    unsigned int fromlen = sizeof from;
-
-    int recv;
-    if ((recv = recvfrom(session->sockfd, buf, sizeof buf, 0,(struct sockaddr *) &from, &fromlen)) > 0) {
-      buf[recv] = '\0';
-      printf("RECV: %d bytes: ", recv);
-      rdp_print(&buf);
-    } else {
-      printf("RECV: %s\n", strerror(errno));
-      // return EXIT_FAILURE;
-    }
+    rdp_read(session);
   }
 
   // FRIGJØR MINNE
 
   rdp_close(session);
 
-  return 1;
+  return EXIT_SUCCESS;
 }
