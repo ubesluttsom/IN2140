@@ -20,16 +20,18 @@ struct rdp_connection {
   socklen_t recipientlen;
 };
 
-int rdp_print(struct rdp *pakke);
+static int rdp_sockfd = 0;
 
-struct rdp_connection *rdp_accept(struct sockaddr_storage ss);
+int rdp_print(struct rdp *pakke);
+int rdp_printc(struct rdp_connection *con);
+
+struct rdp_connection *rdp_accept(int sockfd);
 struct rdp_connection *rdp_connect(char* vert, char *port, struct sockaddr_storage *ss);
-int rdp_write(struct rdp_connection *token, unsigned char *payload, size_t len);
+int rdp_write(struct rdp_connection *token, struct rdp *pakke);
 int rdp_read(struct rdp_connection *token);
 int rdp_close(struct rdp_connection *token);
 
 // TESTOMRÅDE
-int rdp_write_fd(int fd, unsigned char *data, size_t datalen);
-
 void *_get_addr(struct sockaddr_storage *ss);
 void _get_recipient_addr(char *s, struct rdp_connection *token);
+void _get_recipient_port(char *s, struct rdp_connection *token);

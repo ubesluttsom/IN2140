@@ -35,7 +35,18 @@ int main(int argc, char* argv[])
 
   // SEND RDP-PAKKE
    
-  rdp_write(session, (unsigned char *) "Hei.", 4);
+  struct rdp pakke;
+  pakke.flag       = 0x01;
+  pakke.pktseq     = 0x0;
+  pakke.ackseq     = 0x0;
+  pakke.unassigned = 0x0;
+  pakke.senderid   = 0x0;
+  pakke.recvid     = 0x0;
+  pakke.metadata   = 0x0;
+  memset(pakke.payload, '\0', sizeof(pakke.payload));
+  char s[] = "Heisann.";
+  memcpy(pakke.payload, "Hei.", sizeof s);
+  rdp_write(session, &pakke);
 
   // VENT PÅ SVAR
 
