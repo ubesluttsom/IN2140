@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 
   printf("Starter klient.\n");
 
-  struct rdp_connection *session = rdp_connect(vert, port);
+  struct rdp_connection *session = rdp_connect(vert, port, NULL);
   if (session == NULL) {
     printf("RDP: Klarte ikke opprette forbindelse\n");
     return EXIT_FAILURE;
@@ -35,8 +35,13 @@ int main(int argc, char* argv[])
 
   // SEND RDP-PAKKE
    
-  rdp_write(session, (unsigned char *) "Hei", 8);
+  rdp_write(session, (unsigned char *) "Hei.", 4);
 
+  // VENT PÅ SVAR
+
+  sleep(1);
+
+  rdp_read(session); // blokkerer i/o
 
   // FRIGJØR MINNE
 
