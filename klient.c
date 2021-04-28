@@ -27,36 +27,17 @@ int main(int argc, char* argv[])
 
   printf("Starter klient.\n");
 
-  struct rdp_connection *session = rdp_connect(vert, port, NULL);
-  if (session == NULL) {
+  struct rdp_connection *con = rdp_connect(vert, port);
+  if (con == NULL) {
     printf("RDP: Klarte ikke opprette forbindelse\n");
     return EXIT_FAILURE;
   }
-
-  // SEND RDP-PAKKE
-   
-  struct rdp pakke;
-  pakke.flag       = 0x01;
-  pakke.pktseq     = 0x0;
-  pakke.ackseq     = 0x0;
-  pakke.unassigned = 0x0;
-  pakke.senderid   = 0x0;
-  pakke.recvid     = 0x0;
-  pakke.metadata   = 0x0;
-  memset(pakke.payload, '\0', sizeof(pakke.payload));
-  char s[] = "Heisann.";
-  memcpy(pakke.payload, "Hei.", sizeof s);
-  rdp_write(session, &pakke);
-
-  // VENT PÅ SVAR
-
-  sleep(1);
-
-  rdp_read(session); // blokkerer i/o
+  printf("RDP: tilkoblet!\n");
+  rdp_read(con, NULL);
 
   // FRIGJØR MINNE
 
-  rdp_close(session);
+  rdp_close(con);
 
   return EXIT_SUCCESS;
 }
