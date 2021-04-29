@@ -87,6 +87,15 @@ struct rdp_connection *rdp_accept(int sockfd, int accept, int assign_id)
 
   // Hvis vi aksepterer, returnerer vi en ny kobling; ellers NULL.
   if (accept) {
+
+    // // Lager støpselfildeskriptor.
+    // sockfd = socket(sender.ss_family, SOCK_DGRAM, 0);
+    // if (rdp_error(sockfd, "rdp_accept: socket")) return NULL;
+
+    // // Binder UDP-støpselet til nettverksaddressen til avsender.
+    // rv = bind(sockfd, &sender, senderlen);
+    // if (rdp_error(rv, "rdp_accept: bind")) return NULL;
+
     // Lager ny oppkobling
     new_con               = malloc(sizeof(struct rdp_connection));
     new_con->recipient    = malloc(sizeof(struct sockaddr_storage));
@@ -235,7 +244,8 @@ int rdp_write(struct rdp_connection *con, struct rdp *pac)
   if (rdp_error(wc, "rdp_write: sendto")) return EXIT_FAILURE;
 
   // TODO: vent på ACK. Send på nytt etter 100ms. Bør implementeres i egen
-  // funksjon, tror jeg, som også oppdaterer `ackseq`.
+  // funksjon, tror jeg, som også oppdaterer `ackseq`. Kanskje gjøre dette
+  // i applikasjonslaget?
 
   // Øker `pktseq` før vi returnerer.
   con->pktseq += 1;

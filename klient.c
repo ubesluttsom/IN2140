@@ -23,6 +23,7 @@ int main(int argc, char* argv[])
   }
   printf("RDP: tilkoblet!\n");
   rdp_read(con, NULL);
+  //rdp_read(con, NULL);
 
   // FRIGJØR MINNE
 

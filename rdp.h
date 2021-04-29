@@ -48,7 +48,6 @@ int   rdp_print(struct rdp *pakke);
 int   rdp_printc(struct rdp_connection *con);
 
 // TESTOMRÅDE
-int rdp_write_payload(struct rdp_connection *connection, uint8_t *data, size_t datalen);
 void       *_get_addr(struct sockaddr_storage *ss);
 const char *_get_recipient_addr(char *s, struct rdp_connection *con);
 const char *_get_recipient_port(char *s, struct rdp_connection *con);
