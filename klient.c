@@ -1,16 +1,5 @@
-// Standardbibliotek.
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/errno.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-
 // RDP definisjon
 #include "rdp.h"
-
 
 /* MAIN */
 
@@ -27,7 +16,7 @@ int main(int argc, char* argv[])
 
   printf("Starter klient.\n");
 
-  struct rdp_connection *con = rdp_connect(vert, port);
+  struct rdp_connection *con = rdp_connect(vert, port, 789);
   if (con == NULL) {
     printf("RDP: Klarte ikke opprette forbindelse\n");
     return EXIT_FAILURE;

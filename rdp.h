@@ -19,33 +19,36 @@ struct rdp {
   int           senderid;
   int           recvid;
   int           metadata;
-  unsigned char payload[1000];
+  uint8_t payload[1000];
 }__attribute__((packed));
 // ^ pakker tett, siden denne structen skal sendes ut på verdensveven
 
 struct rdp_connection {  
-  // AKA. en slags RDP socket.
-  int id;
-  int sockfd;
-  struct sockaddr_storage *recipient;
-  //struct addrinfo *recipient;
-  socklen_t recipientlen;
+  int pktseq;   // hvor mange pakker er sendt over denne koblingen
+  int ackseq;   // siste pakke som ble ACK-et (avgjør om vi kan sende neste)
+  int senderid; // IDen til vår ende av koblingen
+  int recvid;   // IDen til mottakers ende av koblingen
+  int sockfd;   // nettverksstøpsel på lokal maskin
+  struct sockaddr_storage *recipient; // addresen til mottaker
+  socklen_t recipientlen;             // lengde på addresse
 };
 
-static int rdp_sockfd = 0;
+struct rdp_connection *rdp_accept(int sockfd, int accept, int assign_id);
+struct rdp_connection *rdp_connect(char* vert, char *port, int assign_id);
 
-int rdp_print(struct rdp *pakke);
-int rdp_printc(struct rdp_connection *con);
-
-int rdp_listen(char *port);
-struct rdp_connection *rdp_accept(int sockfd, int accept);
-struct rdp_connection *rdp_connect(char* vert, char *port);
-int rdp_write(struct rdp_connection *token, struct rdp *pakke);
-void *rdp_read(struct rdp_connection *token, void *dest_buf);
-int rdp_close(struct rdp_connection *token);
-int rdp_error (int rv, char *msg);
+int   rdp_listen(char *port);
+int   rdp_write(struct rdp_connection *con, struct rdp *pakke);
+int   rdp_ack(struct rdp_connection *con);
+void *rdp_read(struct rdp_connection *con, void *dest_buf);
+void *rdp_peek(int sockfd, void *dest_buf,
+               struct sockaddr_storage *dest_addr, socklen_t *dest_addrlen);
+int   rdp_close(struct rdp_connection *con);
+int   rdp_error(int rv, char *msg);
+int   rdp_print(struct rdp *pakke);
+int   rdp_printc(struct rdp_connection *con);
 
 // TESTOMRÅDE
-void *_get_addr(struct sockaddr_storage *ss);
-const char *_get_recipient_addr(char *s, struct rdp_connection *token);
-const char *_get_recipient_port(char *s, struct rdp_connection *token);
+int rdp_write_payload(struct rdp_connection *connection, uint8_t *data, size_t datalen);
+void       *_get_addr(struct sockaddr_storage *ss);
+const char *_get_recipient_addr(char *s, struct rdp_connection *con);
+const char *_get_recipient_port(char *s, struct rdp_connection *con);

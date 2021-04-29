@@ -22,27 +22,24 @@ int main(int argc, char *argv[])
 
   struct rdp_connection *new_con = NULL;
   for (int i = 2; i > 0; --i) {
-    new_con = rdp_accept(listen_fd, TRUE); // blokkerer i/o
+    new_con = rdp_accept(listen_fd, TRUE, 255); // blokkerer i/o
     if (new_con != NULL) {
       // Sender et et svar.
       struct rdp pakke;
       memset(&pakke, '\0', sizeof pakke);
-      pakke.flag = 0x04;
-      strcpy(pakke.payload, "... data ...");
+      pakke.flag     = 0x04;
+      pakke.senderid = new_con->senderid;
+      pakke.recvid   = new_con->recvid;
+      strcpy((char *)pakke.payload, "... data ...");
       rdp_write(new_con, &pakke);
+
+      printf("RDP: Venter på ACK ...\n");
+      rdp_read(new_con, NULL);
+
     } else {
-      printf("RDP: ingen nye forbinnelser, leser andre pakker\n");
-      // Lager buffer `buf` som pakke skal mottas på
-      void *buf[sizeof(struct rdp) + 1];
-      memset(&buf, '\0', sizeof buf);
-      int rc = recv(listen_fd, buf, sizeof buf, 0);
-      rdp_error(rc, "RDP: recv");
-      // Printer pakke
-      buf[rc] = "";
-      printf("rdp_read: recv: %d bytes: ", rc);
-      rdp_print((struct rdp *)&buf);
+      // printf("RDP: ingen nye forbinnelser, leser andre pakker\n");
+      // rdp_read(new_con, NULL);
     }
-  //  sleep(3);
   }
 
   // FRIGJØR MINNE
