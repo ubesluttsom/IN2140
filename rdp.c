@@ -234,8 +234,9 @@ int rdp_write(struct rdp_connection *con, struct rdp *pac)
   
   // Hvis vi ikke har mottatt en ACK på forrige pakke vi sendte, nekter denne
   // funksjonen å skrive neste pakke. Applikasjonen som kaller må vente på
-  // en ACK på tidligere sendte pakke.
-  if (con->ackseq < pac->pktseq) {
+  // en ACK på tidligere sendte pakke. (Med mindre man prøver å sende en
+  // koblingsterminering, `flag==0x02`; denne slipper igjennom.)
+  if (con->ackseq < pac->pktseq && pac->flag != 0x02) {
     return EXIT_FAILURE;
   }
 
@@ -390,10 +391,11 @@ void *rdp_peek(int sockfd, void *dest_buf, struct sockaddr_storage *dest_addr,
   return dest_buf;
 }
 
-int rdp_close(struct rdp_connection *con)
+int rdp_close(struct rdp_connection *con, // kobling som skal lukke
+              int close_sockfd)           // om `sockfd` skal lukkes, boolsk
 {
   if (con != NULL) {
-    close(con->sockfd);
+    if (close_sockfd) close(con->sockfd);
     free(con->recipient);
     free(con);
     return EXIT_SUCCESS;

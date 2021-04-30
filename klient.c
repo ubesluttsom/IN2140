@@ -22,12 +22,22 @@ int main(int argc, char* argv[])
     return EXIT_FAILURE;
   }
   printf("RDP: tilkoblet!\n");
-  rdp_read(con, NULL);
-  //rdp_read(con, NULL);
+
+  // MOTTAR PAKKE
+
+  struct rdp pkt;
+  bzero(&pkt, sizeof pkt);
+
+  while (pkt.flag != 0x02) {
+    rdp_read(con, &pkt);
+    rdp_print(&pkt);
+  }
+
+  printf("klient: mottokk termineringsforespørsel! Avslutter\n");
 
   // FRIGJØR MINNE
 
-  rdp_close(con);
+  rdp_close(con, TRUE);
 
   return EXIT_SUCCESS;
 }

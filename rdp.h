@@ -42,7 +42,7 @@ int   rdp_ack(struct rdp_connection *con);
 void *rdp_read(struct rdp_connection *con, void *dest_buf);
 void *rdp_peek(int sockfd, void *dest_buf,
                struct sockaddr_storage *dest_addr, socklen_t *dest_addrlen);
-int   rdp_close(struct rdp_connection *con);
+int   rdp_close(struct rdp_connection *con, int close_sockfd);
 int   rdp_error(int rv, char *msg);
 int   rdp_print(struct rdp *pakke);
 int   rdp_printc(struct rdp_connection *con);
