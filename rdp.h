@@ -24,13 +24,13 @@ struct rdp {
 // ^ pakker tett, siden denne structen skal sendes ut på verdensveven
 
 struct rdp_connection {  
-  int pktseq;   // hvor mange pakker er sendt over denne koblingen
+  int pktseq;   // hvor mange pakker i sekvens er sendt/mottatt
   int ackseq;   // siste pakke som ble ACK-et (avgjør om vi kan sende neste)
   int senderid; // IDen til vår ende av koblingen
   int recvid;   // IDen til mottakers ende av koblingen
   int sockfd;   // nettverksstøpsel på lokal maskin
-  struct sockaddr_storage *recipient; // addresen til mottaker
-  socklen_t recipientlen;             // lengde på addresse
+  struct sockaddr_storage *recipient; // adressen til mottaker
+  socklen_t recipientlen;             // lengde på adresse
 };
 
 struct rdp_connection *rdp_accept(int sockfd, int accept, int assign_id);

@@ -5,20 +5,36 @@
 #define YEL "\e[0;33m"
 #define RESET "\e[0m"
 
-int rdp_print(struct rdp *pakke)
+int rdp_print(struct rdp *pkt)
 {
   printf("{ ");
-  printf("flag==0x%x, ",          pakke->flag);
-  printf("pktseq==0x%x, ",        pakke->pktseq);
-  printf("ackseq==0x%x, ",        pakke->ackseq);
-  printf("senderid==0x%x, ",      ntohl(pakke->senderid));
-  printf("recvid==0x%x, ",        ntohl(pakke->recvid));
-  printf("metadata==0x%x, ",      pakke->metadata);
-  printf("payload==\"%s\" }\n", pakke->payload);
+  printf("flag==0x%x, ",          pkt->flag);
+  printf("pktseq==0x%x, ",        pkt->pktseq);
+  printf("ackseq==0x%x, ",        pkt->ackseq);
+  printf("senderid==0x%x, ",      ntohl(pkt->senderid));
+  printf("recvid==0x%x, ",        ntohl(pkt->recvid));
+  printf("metadata==0x%x, ",      pkt->metadata);
+
+  // Passer på å terminere `payload` med `\0` før utskrift. Her lager jeg
+  // en ny strengbuffer som jeg kopierer over til. TODO: tilpasse dette til
+  // «flexible array member».
+  int payloadlen;
+  if (pkt->flag == 0x04) {
+    payloadlen = pkt->metadata - sizeof(pkt->flag)   - sizeof(pkt->pktseq)
+                               - sizeof(pkt->ackseq) - sizeof(pkt->senderid)
+                               - sizeof(pkt->recvid) - sizeof(pkt->metadata);
+  } else payloadlen = 0;
+  char str[payloadlen + 1];
+  str[payloadlen] = '\0';
+  strncpy(str, (char *)pkt->payload, payloadlen);
+
+  printf("payload==\"%s\" }\n", str);
+
   return EXIT_SUCCESS;
 }
 
-int rdp_printc(struct rdp_connection* con) {
+int rdp_printc(struct rdp_connection* con)
+{
   printf("senderid==%d, ", ntohl(con->senderid));
   printf("recvid==%d, ",   ntohl(con->recvid));
   printf("sockfd==%d, ",   con->sockfd);
@@ -103,6 +119,8 @@ struct rdp_connection *rdp_accept(int sockfd, int accept, int assign_id)
     new_con->sockfd       = sockfd;
     new_con->senderid     = htonl(assign_id);
     new_con->recvid       = ((struct rdp *)&buf)->senderid;
+    new_con->pktseq       = -1; // signal på at ingen pakker er sendt ennå
+    new_con->ackseq       = -1; // signal på at ingen pakker er ACK-et ennå
     memset(new_con->recipient, '\0', sizeof(struct sockaddr_storage));
     memcpy(new_con->recipient, &sender, senderlen);
     return new_con;
@@ -202,6 +220,8 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
   con->recipient    = malloc(sizeof(struct sockaddr_storage));
   con->recipientlen = res->ai_addrlen;
   con->sockfd       = sockfd;
+  con->pktseq       = -1; // signal på at ingen pakker er mottatt ennå
+  con->ackseq       = -1; // signal på at ingen pakker er ACK-et ennå
   con->senderid     = pac.senderid;
   memset(con->recipient, '\0', sizeof(struct sockaddr_storage));
   memcpy(con->recipient, res->ai_addr, sizeof(struct sockaddr_storage));
@@ -236,7 +256,9 @@ int rdp_write(struct rdp_connection *con, struct rdp *pac)
   // funksjonen å skrive neste pakke. Applikasjonen som kaller må vente på
   // en ACK på tidligere sendte pakke. (Med mindre man prøver å sende en
   // koblingsterminering, `flag==0x02`; denne slipper igjennom.)
-  if (con->ackseq < pac->pktseq && pac->flag != 0x02) {
+  // Kommentar: Dette er også noe jeg sjekker i server applikasjonen min,
+  //            med siden det er et formelt krav i oppgaven gjøres det her og.
+  if (pac->pktseq > con->ackseq + 1 && pac->flag != 0x02) {
     return EXIT_FAILURE;
   }
 
@@ -247,9 +269,7 @@ int rdp_write(struct rdp_connection *con, struct rdp *pac)
   // TODO: vent på ACK. Send på nytt etter 100ms. Bør implementeres i egen
   // funksjon, tror jeg, som også oppdaterer `ackseq`. Kanskje gjøre dette
   // i applikasjonslaget?
-
-  // Øker `pktseq` før vi returnerer.
-  con->pktseq += 1;
+  
   return EXIT_SUCCESS;
 }
 
@@ -278,9 +298,9 @@ int rdp_ack(struct rdp_connection *con)
 void *rdp_read(struct rdp_connection *con, void *dest_buf)
 {
   int rc;  // «read count»
-  void *buf[sizeof(struct rdp) + 1]; // hvor pakken mottas
-  struct sockaddr_storage sender;    // lagring for avsenders addresse
-  socklen_t senderlen;               // avsenderaddresse lengde
+  void *buf[sizeof(struct rdp)];  // hvor pakken mottas
+  struct sockaddr_storage sender; // lagring for avsenders addresse
+  socklen_t senderlen;            // avsenderaddresse lengde
 
   // Nuller buffer `buf` som pakke skal mottas på
   memset(&buf, '\0', sizeof buf);
@@ -307,7 +327,6 @@ void *rdp_read(struct rdp_connection *con, void *dest_buf)
     // Lager buffer for avsenderstreng
     char s[INET6_ADDRSTRLEN];
     // Printer pakke
-    buf[rc] = "";
     printf("rdp_read: recvfrom: %d bytes from \"%s\":\n",
            rc, _get_recipient_addr(s, con));
     rdp_print((struct rdp *)&buf);
@@ -319,14 +338,14 @@ void *rdp_read(struct rdp_connection *con, void *dest_buf)
   // Sender en ACK om pakken inneholder nyttelast
   if (((struct rdp *)&buf)->flag == 0x04) {
     if (((struct rdp *)&buf)->pktseq <= con->ackseq && con->pktseq != 0) {
-      // Hvis pakkesekvendnummeret er lavere enn siste ACK-en vi sendte,
+      // Hvis pakkesekvensnummeret er lavere enn siste ACK-en vi sendte,
       // sender vi forrige ACK på nytt og kaster denne pakken.
       rdp_ack(con);
-      printf("%srdp_read: mottokk duplikatpakke. Gjentar ACK.%s\n",
+      printf("%srdp_read: mottokk duplikat. Gjentar ACK på forrige pakke.%s\n",
              RED, RESET);
       return NULL;
     } else {
-      // Ellers setter øker vi `pktseq` og sender ACK på den nye pakken.
+      // Ellers oppdateres `pktseq` og vi sender ACK på den nye pakken.
       con->pktseq = ((struct rdp *)&buf)->pktseq;
       rdp_ack(con);
     }
