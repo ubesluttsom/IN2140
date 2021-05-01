@@ -120,19 +120,22 @@ int main(int argc, char *argv[])
 
   printf("Starter server.\n");
 
+  // Oppretter nettverksstøpsel som det skal lyttes på
   listen_fd = rdp_listen(port);
   if (listen_fd == EXIT_FAILURE) return EXIT_FAILURE; 
 
-  // Nuller ut arrayet som skal holde koblingene våre.
+  // Nuller ut arrayet som skal holde alle koblingene våre.
   memset(&cons, '\0', sizeof cons);
 
-  // Venter på pakke ...
   struct rdp pkt_buf;
   struct rdp_connection *new_con;
 
-  for (int i = 0; i < 10; i++) { // MIDLERTIDIG
+  for (int i = 0; i < 1000; i++) { // MIDLERTIDIG
 
-    // Sniktitt på pakke
+    // SNIKTITT PÅ PAKKE:
+
+    // TODO: dette blokkerer I/O, og bør heller implementeres med `select()`,
+    // eller så må `recvfrom()` i `rdp_peek()` endes til ikke-blokkerende.
     rdp_peek(listen_fd, &pkt_buf, NULL, NULL);
     idx = id_to_idx(pkt_buf.senderid, cons, N);
 
@@ -140,17 +143,27 @@ int main(int argc, char *argv[])
 
     // Hvis forbindelsesforespørsel:
     if (pkt_buf.flag == 0x01) {
-      // Godta forbindelse om det er plass. Bruker `n` for å telle plassene.
-      new_con = rdp_accept(listen_fd, n < N ? TRUE : FALSE, n);
+      printf("server: forbindelsesforespørsel mottatt\n");
+      // Godta forbindelse om bare hvis etterspurt ID ikke er i bruk,
+      // og det er plass. Bruker `n` for å telle plassene.
+      if (id_to_idx(pkt_buf.senderid, cons, N) != -1) {
+        printf("server: forbindelsesforespørsel avslått: ID er i bruk\n");
+        new_con = rdp_accept(listen_fd, FALSE, n);
+      } else if (n == N) { 
+        printf("server: forbindelsesforespørsel avslått: ingen kapasitet\n");
+        new_con = rdp_accept(listen_fd, FALSE, n);
+      } else {
+        new_con = rdp_accept(listen_fd, TRUE, n);
+      }
       if (new_con != NULL) {
         cons[n] = new_con;
         n++;
       }
     }
 
-    // Hvis forbindelsesavsluttning:
+    // Hvis forbindelsesavslutting:
     else if (idx > -1 && pkt_buf.flag == 0x02) {
-      printf("server: mottokk forbinnelsesavslutting. Terminerer kobling\n");
+      printf("server: mottok forbindelsesavslutting. Terminerer kobling\n");
       free(cons[idx]);
       cons[idx] = NULL;
     }
@@ -158,10 +171,11 @@ int main(int argc, char *argv[])
     // Hvis ACK:
     else if (idx > -1 && pkt_buf.flag == 0x08) {
       // Per nå, fikser `rdp_read()` dette. TODO: skille ut i egen funksjon?
-      printf("server: mottokk ACK\n");
-      rdp_read(cons[idx], NULL);
-      // TODO: hvis dette er ACK på siste pakke må forbindelsesavsluttning
-      // sendes! Alla:
+      printf("server: mottokk ACK %d fra %d\n",
+             pkt_buf.ackseq, ntohl(cons[idx]->recvid));
+      rdp_read(cons[idx], &pkt_buf);
+
+      // Hvis dette er ACK på siste pakke må forbindelsesavsluttning
       if ( (sizeof(pkt_buf.payload))*(cons[idx]->ackseq + 1) >= datalen ) {
         // Altså, hvis vi med siste pakke har (i teorien) skrevet all data,
         // eller mer, skal kobling termineres.
@@ -189,23 +203,41 @@ int main(int argc, char *argv[])
       // Hopp over ikke-eksisterende koblinger
       if (cons[j] == NULL) continue;
 
+      // TODO: må implementere en tidstaker eller hvileperiode av noe slag.
+      // Nå bare gjentas pakker igjen og igjen, uten å gi klienten tid til å
+      // ACKe dem.
+
       // Lager neste pakke som vi ønsker å sende:
       bzero(&pkt_buf, sizeof pkt_buf);
       mk_next_pkt(cons[j], data, datalen, &pkt_buf);
       // Sender pakke:
       rdp_write(cons[j], &pkt_buf);
     }
+
+    // FERDIG?
+
+    if (n == N) {
+
+      // Sjekker om vi har tjent `N` klienter og terminert alle forbindelser
+      // ved å se om koblings arrayet `cons[]` kun har NULL pekere.
+      int j = 0;
+      while ( j < N && cons[j] == NULL ) j++; 
+      if (j + 1 == N) {
+        
+        // AVSLUTT. FRIGJØR MINNE.
+
+        printf("server: har tjent N==%d klienter. Avslutter server.\n", N);
+        for (j = 0; i < N; i++) {
+          if (cons[i] == NULL) continue;
+          else terminate(cons[i]);
+        }
+
+        // Lukker nettverksstøpsel.
+        close(listen_fd);
+        return EXIT_SUCCESS;
+      }
+    }
   }
 
-  // FRIGJØR MINNE
-
-  for (int i = 0; i < N; i++) {
-    if (cons[i] == NULL) continue;
-    else terminate(cons[i]);
-  }
-
-  // Lukker nettverksstøpsel.
-  close(listen_fd);
-
-  return EXIT_SUCCESS;
+  return EXIT_SUCCESS; // <-- Bør aldri nåes.
 }

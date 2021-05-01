@@ -1,6 +1,10 @@
 // RDP definisjon
 #include "rdp.h"
 
+#include <time.h>
+#include <sys/time.h>
+
+
 /* MAIN */
 
 int main(int argc, char* argv[])
@@ -11,12 +15,15 @@ int main(int argc, char* argv[])
     return EXIT_FAILURE;
   }
 
+  srand(time(NULL));
+  int rnd = rand();
+
   char* vert = argv[1];
   char* port = argv[2];
 
   printf("Starter klient.\n");
 
-  struct rdp_connection *con = rdp_connect(vert, port, 789);
+  struct rdp_connection *con = rdp_connect(vert, port, rnd);
   if (con == NULL) {
     printf("RDP: Klarte ikke opprette forbindelse\n");
     return EXIT_FAILURE;
