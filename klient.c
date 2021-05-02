@@ -13,33 +13,34 @@ int main(int argc, char* argv[])
     return EXIT_FAILURE;
   }
 
-  srand(time(NULL));
-  int rnd = rand();
-
   char* vert = argv[1];                // nettverksaddressen til serveren
   char* port = argv[2];                // RDPs nettverksport
   set_loss_probability(atof(argv[3])); // sett pakketapsannsynlighet
 
+  struct rdp_connection *con; // datastruktur med oppkoblingsinfo
+  struct rdp pkt;             // buffer vi mottar pakker på
+
   printf("Starter klient.\n");
 
-  struct rdp_connection *con = rdp_connect(vert, port, rnd);
+  srand(time(NULL));                     // seed pseudotilfeldighet
+  con = rdp_connect(vert, port, rand()); // prøver å koble til server
   if (con == NULL) {
-    printf("RDP: Klarte ikke opprette forbindelse\n");
+    printf("klient: klarte ikke opprette forbindelse til server\n");
     return EXIT_FAILURE;
+  } else printf("klient: tilkoblet server!\n");
+
+
+  // MOTTAR PAKKER
+
+  bzero(&pkt, sizeof pkt); // nuller ut pakkebufferet
+
+  // Prøver å lese pakker til vi mottar et koblingsavsluttings flagg
+  while (pkt.flag != RDP_TER) {
+    rdp_read(con, &pkt); // les pakke fra forbindelsen. BLOKKER I/O!
+    rdp_print(&pkt);     // utskrift av pakken vi mottok
   }
-  printf("RDP: tilkoblet!\n");
 
-  // MOTTAR PAKKE
-
-  struct rdp pkt;
-  bzero(&pkt, sizeof pkt);
-
-  while (pkt.flag != 0x02) {
-    rdp_read(con, &pkt);
-    rdp_print(&pkt);
-  }
-
-  printf("klient: mottokk termineringsforespørsel! Avslutter\n");
+  printf("klient: mottok termineringsforespørsel! Avslutter\n");
 
   // FRIGJØR MINNE
 

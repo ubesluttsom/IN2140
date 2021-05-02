@@ -21,7 +21,7 @@ int id_to_idx(int id, struct rdp_connection *cons[], int conslen)
 //   // array `data_dest`. Dette arrayet kan dermed brukes med en
 //   // «stride»-faktor, alla `data_dest[1000 * con->pktseq]` for å hente
 //   // nyttelasten til pakke nummer `pktseq`. Dette kan gjøres på forhånd
-//   // siden alle klienter skal sendes samme fil. RETUR: `sizeof data_dest[]`.
+//   // siden alle klienter skal sendes samme fil. RETUR: `sizeof data_dest[]`.  
 // }
 
 int mk_next_pkt(struct rdp_connection *con, // koblingen som skal sendes over
@@ -30,7 +30,7 @@ int mk_next_pkt(struct rdp_connection *con, // koblingen som skal sendes over
                 struct rdp *pkt)            // peker hvor pakke skal lagres
 {
   // TODO: Funksjon som lager neste pakke som skal sendes over kobling til
-  // klient. Denne bør kankskje flyttes til transportlaget, og slåes sammen
+  // klient. Denne bør kanskje flyttes til transportlaget, og slås sammen
   // med `rdp_write` i `rdp.c`?
 
   int wc;            // «write count»
@@ -59,7 +59,7 @@ int mk_next_pkt(struct rdp_connection *con, // koblingen som skal sendes over
   }
 
   // Lager pakke
-  pkt->flag     = 0x04;
+  pkt->flag     = RDP_DAT;
   pkt->senderid = con->senderid;
   pkt->recvid   = con->recvid;
   // Finner total pakkelengde. TODO: endre til «flexible array member».
@@ -80,7 +80,7 @@ int terminate(struct rdp_connection *con)
   struct rdp pkt;
   
   bzero(&pkt, sizeof pkt);
-  pkt.flag     = 0x02; // <-- termflagg
+  pkt.flag     = RDP_TER; // <-- termflagg
   pkt.senderid = con->senderid;
   pkt.recvid   = con->recvid;
   pkt.pktseq   = con->ackseq + 1;
@@ -103,41 +103,61 @@ int main(int argc, char *argv[])
   }
 
   char *port  = argv[1];               // nettverksporten vi vil bruke
+  char *path  = argv[2];               // filsti til fil vi skal sende
   const int N = atoi(argv[3]);         // maks klienter
-  set_loss_probability(atof(argv[4])); // sett pakketapsannsynlighet
   int n       = 0;                     // faktisk antall klienter
+  set_loss_probability(atof(argv[4])); // sett pakketapsannsynlighet
 
-  // MIDLERTIDIGE DATAVERDIER: {
-  // TODO: Lag funksjon som kapper opp på forhånd filen inn i pakker. Kanskje
-  // samle disse inn i et array indeksert av sekvensnummer, eller no’?
-  uint8_t data[] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXsssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssTTT";
-  size_t datalen = 2004;
-  // }
+
+  // FILINNLESING:
+
+  uint8_t *data;   // data-array med alt som skal sendes
+  size_t datalen;  // hvor mye data som skal sendes i bytes
+  FILE* data_file; // filpeker
+
+  // Åpner fil
+  data_file = fopen(path, "r");
+  if (data_file == NULL) {
+    rdp_error(-1, "server: parse_file");
+    exit(EXIT_FAILURE);
+  }
+
+  // Finner lengde på fil, `datalen`
+  fseek(data_file, 0, SEEK_END);
+  datalen = ftell(data_file);
+  fseek(data_file, 0, SEEK_SET);
+
+  // Allokerer minne til all data
+  data = malloc(datalen);
+  
+  // Leser igjennom hele filen og skriver hver byte til data arrayet.
+  for (int i = 0; fread(&data[i], sizeof(uint8_t), 1, data_file); i++);
+
+
+  // ANDRE VARIABLER:
 
   int listen_fd;                  // fildesk. til nettverksstøpsel vi avlytter
   struct rdp_connection *cons[N]; // holder koblinger til alle klienter
-  int idx;                        // indeks til en forbindelse i `cons[]`
+  struct rdp_connection *new_con; // peker til en potensiell ny forbindelse
+  int idx;                        // indeks til en forbindelse: `cons[idx]`
+  struct rdp pkt_buf;             // pakkebuffer til ymse bruk i hovedløkka
+  struct pollfd pfds[1];          // fildesk. vi vil at `poll` skal sjekke
+  int pkt_pending;                // boolsk, om en pakke venter i fildesk.
 
-  printf("Starter server.\n");
+  // Nuller ut arrayet som skal holde alle koblingene våre.
+  bzero(&cons, sizeof cons);
+
 
   // LISTEN:
 
   // Oppretter nettverksstøpsel som det skal lyttes på
   listen_fd = rdp_listen(port);
   if (listen_fd == EXIT_FAILURE) return EXIT_FAILURE; 
+  pfds->fd = listen_fd;  // vi vil at `poll` skal lytte på dette støpselet
+  pfds->events = POLLIN; // vi overvåker om vi kan *lese* (ikke skrive)
 
-  // «POLL» OPPSETT:
 
-  struct pollfd pfds[1];
-  pfds->fd = listen_fd;
-  pfds->events = POLLIN;
-  int pkt_pending;
-
-  // Nuller ut arrayet som skal holde alle koblingene våre.
-  memset(&cons, '\0', sizeof cons);
-
-  struct rdp pkt_buf;
-  struct rdp_connection *new_con;
+  // HOVEDLØKKE:
 
   for (int i = 0; i < 10000000; i++) { // MIDLERTIDIG
 
@@ -158,16 +178,16 @@ int main(int argc, char *argv[])
     // TOLKER PAKKE:
 
     // Hvis forbindelsesforespørsel:
-    if (pkt_pending && pkt_buf.flag == 0x01) {
+    if (pkt_pending && pkt_buf.flag == RDP_REQ) {
       printf("server: forbindelsesforespørsel mottatt\n");
       // Godta forbindelse om bare hvis etterspurt ID ikke er i bruk,
       // og det er plass. Bruker `n` for å telle plassene.
       if (id_to_idx(pkt_buf.senderid, cons, N) != -1) {
         printf("server: forbindelsesforespørsel avslått: ID er i bruk\n");
-        new_con = rdp_accept(listen_fd, FALSE, n);
+        new_con = rdp_accept(listen_fd, NFSP_INVALID, n);
       } else if (n == N) { 
         printf("server: forbindelsesforespørsel avslått: ingen kapasitet\n");
-        new_con = rdp_accept(listen_fd, FALSE, n);
+        new_con = rdp_accept(listen_fd, NFSP_CONFULL, n);
       } else {
         new_con = rdp_accept(listen_fd, TRUE, n);
       }
@@ -178,14 +198,14 @@ int main(int argc, char *argv[])
     }
 
     // Hvis forbindelsesavslutting:
-    else if (pkt_pending && idx > -1 && pkt_buf.flag == 0x02) {
+    else if (pkt_pending && idx > -1 && pkt_buf.flag == RDP_TER) {
       printf("server: mottok forbindelsesavslutting. Terminerer kobling\n");
       free(cons[idx]);
       cons[idx] = NULL;
     }
 
     // Hvis ACK:
-    else if (pkt_pending && idx > -1 && pkt_buf.flag == 0x08) {
+    else if (pkt_pending && idx > -1 && pkt_buf.flag == RDP_ACK) {
       // Per nå, fikser `rdp_read()` dette. TODO: skille ut i egen funksjon?
       printf("server: mottokk ACK %d fra %d\n",
              pkt_buf.ackseq, ntohl(cons[idx]->recvid));
@@ -243,10 +263,12 @@ int main(int argc, char *argv[])
         // AVSLUTT. FRIGJØR MINNE.
 
         printf("server: har tjent N==%d klienter. Avslutter server.\n", N);
-        for (j = 0; i < N; i++) {
-          if (cons[i] == NULL) continue;
+        for (j = 0; j < N; j++) {
+          if (cons[j] == NULL) continue;
           else terminate(cons[i]);
         }
+
+        free(data);
 
         // Lukker nettverksstøpsel.
         close(listen_fd);
@@ -255,5 +277,5 @@ int main(int argc, char *argv[])
     }
   }
 
-  return EXIT_SUCCESS; // <-- Bør aldri nåes.
+  return EXIT_FAILURE; // <-- Bør aldri nåes.
 }

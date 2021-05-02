@@ -13,15 +13,25 @@
 #define TRUE 1
 #define FALSE 0
 
+#define RDP_REQ 0x01 // RDP_REQ(UEST): forbindelsesforespørsel.        
+#define RDP_TER 0x02 // RDP_TER(MINATE): forbindelsesavslutning.         
+#define RDP_DAT 0x04 // RDP_DAT(A): datapakke.                      
+#define RDP_ACK 0x08 // RDP_ACK: en ACK.                            
+#define RDP_ACC 0x10 // RDP_ACC(EPT) aksepterer en forbindelsesforespørsel.
+#define RDP_DEN 0x20 // RDP_DEN(IED) avslår forbindelsesforespørsel.    
+
+#define NFSP_CONFULL -1 // avslår forbindelse grunnet kapasitet
+#define NFSP_INVALID -2 // avslår forbindelse grunnet ugyldig sender ID
+
 struct rdp {  
-  unsigned char flag;
-  unsigned char pktseq;
-  unsigned char ackseq;
-  unsigned char unassigned;
-  int           senderid;
-  int           recvid;
-  int           metadata;
-  uint8_t payload[1000];
+  unsigned char flag;       // «Flagg som definerer forskjellige typer pakker»
+  unsigned char pktseq;     // «Sekvensnummer pakke»
+  unsigned char ackseq;     // «Sekvensnummer ACK-ed av pakke»
+  unsigned char unassigned; // «Ubrukt, det vil si alltid 0»
+  int           senderid;   // «Avsenderens forbindelses-ID i [Big-Endian]»
+  int           recvid;     // «Mottakerens forbindelses-ID i [Big-Endian]»
+  int           metadata;   // total datapakkelengde, eller `RDP_DEN` årsak
+  uint8_t payload[1000];    // Nyttelast. TODO: «flexible array member»
 }__attribute__((packed));
 // ^ pakker tett, siden denne structen skal sendes ut på verdensveven
 

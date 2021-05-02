@@ -20,7 +20,7 @@ int rdp_print(struct rdp *pkt)
   // en ny strengbuffer som jeg kopierer over til. TODO: tilpasse dette til
   // «flexible array member».
   int payloadlen;
-  if (pkt->flag == 0x04) {
+  if (pkt->flag == RDP_DAT) {
     payloadlen = pkt->metadata - sizeof(pkt->flag)   - sizeof(pkt->pktseq)
                                - sizeof(pkt->ackseq) - sizeof(pkt->senderid)
                                - sizeof(pkt->recvid) - sizeof(pkt->metadata);
@@ -72,39 +72,38 @@ struct rdp_connection *rdp_accept(int sockfd, int accept, int assign_id)
   memset(&sender, '\0', sizeof sender);
   senderlen = sizeof sender;
   
-  // Titter på pakke (BLOKKERER I/O!)
-  if (rdp_peek(sockfd, buf, &sender, &senderlen) == NULL) return NULL;
+  // Mottar pakke. (BLOKKERER I/O!)
+  rc = recvfrom(sockfd,
+      buf,
+      sizeof buf,
+      0,
+      (struct sockaddr *)&sender,
+      &senderlen);
+  if (rdp_error(rc, "rdp_accept: recvfrom")) return NULL;
 
-  // Sjekker om pakken er en forbindelsesforespørsel. TODO: dette er en
-  // unødvendig dobbeltsjekk; `rdp_accept` bør ikke kalles hvis man ikke er
-  // sikker på at neste pakke i støpselet er en forespørsel.
-  if (((struct rdp *)&buf)->flag == 0x01) {
-    // Mottar pakke, *for real* denne gangen (BLOKKERER I/O!)
-    rc = recvfrom(sockfd,
-                  buf,
-                  sizeof buf,
-                  0,
-                  (struct sockaddr *)&sender,
-                  &senderlen);
-    if (rdp_error(rc, "rdp_accept: recvfrom")) return NULL;
-  } else {
-    printf("rdp_accept: recvfrom: ikke en forespørsel; ignorerer\n");
+  // Dobbelsjekker pakkeflagg
+  if (((struct rdp *)&buf)->flag != RDP_REQ) {
+    // Dette skal ikke skje. Bør ha blitt sjekket før kallet på
+    // `rdp_accept()`.
+    printf("rdp_accept: ikke en forespørsel. Pakke kastes\n");
     return NULL;
   }
 
   // Sender forespørselssvar
   memset(&pkt, '\0', sizeof(pkt));
-  pkt.flag     = accept ? 0x10 : 0x20;
   pkt.senderid = htonl(assign_id);
   pkt.recvid   = ((struct rdp *)&buf)->senderid;
-  // TODO: metadata felt må fylles inn ved avslag på kobling:
-  // pkt.metadata = accept ? 0x0 : <grunn til avslag>;
+  // `accept` er et flagg med en av verdiene: `NFSP_CONFULL`, `NFSP_INVALID`
+  // eller `TRUE`. Hvis `accept` ikke er `TRUE`, blir kobling avslått og vi
+  // sender flagget/årsaken tilbake i `metadata`-feltet.
+  pkt.flag     = (accept == TRUE) ? RDP_ACC : RDP_DEN;
+  pkt.metadata = (accept != TRUE) ? accept : 0;
   wc = send_packet(sockfd, (void *)&pkt, sizeof pkt, 0,
                    (struct sockaddr *)&sender, senderlen);
   if (rdp_error(wc, "rdp_accept: send_packet")) return NULL; 
 
   // Hvis vi aksepterer, returnerer vi en ny kobling; ellers NULL.
-  if (accept) {
+  if (accept == TRUE) {
 
     // // Lager støpselfildeskriptor.
     // sockfd = socket(sender.ss_family, SOCK_DGRAM, 0);
@@ -142,7 +141,7 @@ int rdp_listen(char *port)
   hints.ai_flags    = AI_PASSIVE;  // bruker addresen til den lokale maskinen
   rv = getaddrinfo(NULL, port, &hints, &res);  // NULL som hostname => oss selv
   if (rv != 0) {
-    fprintf(stderr, "%srdp_connect: getaddrinfo: %s%s\n",
+    fprintf(stderr, "%srdp_listen: getaddrinfo: %s%s\n",
             RED, gai_strerror(rv), RESET);
     return EXIT_FAILURE;
   }
@@ -157,7 +156,7 @@ int rdp_listen(char *port)
   rv = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int));
   if (rdp_error(rv, "rdp_listen: setsockopt")) return EXIT_FAILURE;
 
-  // Binder UDP-støpselet til nettverksaddressen vi har funnet.
+  // Binder UDP-støpselet til nettverksadressen vi har funnet.
   rv = bind(sockfd, res->ai_addr, res->ai_addrlen);
   if (rdp_error(rv, "rdp_listen: bind")) return EXIT_FAILURE;
 
@@ -172,9 +171,9 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
 
   // Setter hints til `getaddrinfo`
   memset(&hints, '\0', sizeof hints); 
-  hints.ai_family   = AF_UNSPEC;   // spesifierer ikke IP versjon
+  hints.ai_family   = AF_UNSPEC;   // spesifiserer ikke IP versjon
   hints.ai_socktype = SOCK_DGRAM;  // vi ønsker typen «datagram», for UDP
-  hints.ai_flags    = AI_PASSIVE;  // bruker addresen til den lokale maskinen
+  hints.ai_flags    = AI_PASSIVE;  // bruker adressen til den lokale maskinen
 
   // Gjør DNS-oppslag
   rv = getaddrinfo(vert, port, &hints, &res);
@@ -185,7 +184,7 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
   }
 
   // TODO: `res` er nå en lenket liste med svar fra DNS-oppslaget. Jeg bare
-  // anntar at første resultat er gyldig, men ideellt bør jeg prøve alle
+  // antar at første resultat er gyldig, men ideelt bør jeg prøve alle
   // nodene før jeg gir opp.
 
   // Lager støpselfildeskriptor
@@ -210,7 +209,7 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
   // Sender forespørsel til server
   struct rdp pkt;
   memset(&pkt, '\0', sizeof(pkt));
-  pkt.flag     = 0x01;
+  pkt.flag     = RDP_REQ;
   pkt.senderid = htonl(assign_id);
   pkt.recvid   = htonl(0);
   wc = send_packet(sockfd, (void *)&pkt, sizeof pkt, 0,
@@ -238,8 +237,11 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
   rdp_print(&pkt);
   // Hvis forespørselen blir avslått, frigjør vi koblingstrukturen vi
   // konstruerte og setter pekeren til NULL.
-  if (pkt.flag != 0x10) { 
-    printf("%srdp_connect: forbindelse avslått av server%s\n", RED, RESET);
+  if (pkt.flag != RDP_ACC) { 
+    printf("%srdp_connect: forbindelse avslått av server", RED);
+    if (pkt.metadata == NFSP_INVALID) printf(": ugyldig ID");
+    if (pkt.metadata == NFSP_CONFULL) printf(": ingen kapasitet");
+    printf("%s\n", RESET);
     free(con);
     con = NULL;
   } else {
@@ -257,10 +259,10 @@ int rdp_write(struct rdp_connection *con, struct rdp *pkt)
   // Hvis vi ikke har mottatt en ACK på forrige pakke vi sendte, nekter denne
   // funksjonen å skrive neste pakke. Applikasjonen som kaller må vente på
   // en ACK på tidligere sendte pakke. (Med mindre man prøver å sende en
-  // koblingsterminering, `flag==0x02`; denne slipper igjennom.)
+  // koblingsterminering, `flag==RDP_TER`; denne slipper igjennom.)
   // Kommentar: Dette er også noe jeg sjekker i server applikasjonen min,
   //            med siden det er et formelt krav i oppgaven gjøres det her og.
-  if (pkt->pktseq > con->ackseq + 1 && pkt->flag != 0x02) {
+  if (pkt->pktseq > con->ackseq + 1 && pkt->flag != RDP_TER) {
     return EXIT_FAILURE;
   }
 
@@ -281,7 +283,7 @@ int rdp_ack(struct rdp_connection *con)
   struct rdp pkt; // ACK-pakken vi skal sende
 
   memset(&pkt, '\0', sizeof pkt);
-  pkt.flag     = 0x08; // ACK-flagg
+  pkt.flag     = RDP_ACK; // ACK-flagg
   pkt.senderid = con->senderid;
   pkt.recvid   = con->recvid;
   pkt.ackseq   = con->pktseq;
@@ -338,7 +340,7 @@ void *rdp_read(struct rdp_connection *con, void *dest_buf)
   }
 
   // Sender en ACK om pakken inneholder nyttelast
-  if (((struct rdp *)&buf)->flag == 0x04) {
+  if (((struct rdp *)&buf)->flag == RDP_DAT) {
     if (((struct rdp *)&buf)->pktseq <= con->ackseq) {
       // Hvis pakkesekvensnummeret er lavere enn siste ACK-en vi sendte,
       // sender vi forrige ACK på nytt og kaster denne pakken.
@@ -354,7 +356,7 @@ void *rdp_read(struct rdp_connection *con, void *dest_buf)
   }
 
   // Håndterer pACKe.
-  if (((struct rdp *)&buf)->flag == 0x08) {
+  if (((struct rdp *)&buf)->flag == RDP_ACK) {
     // Oppdaterer `ackseq` i denne oppkoblingen.
     con->ackseq = ((struct rdp *)&buf)->ackseq;
   }
