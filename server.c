@@ -1,6 +1,8 @@
 // RDP definisjon
 #include "rdp.h"
 
+#include <poll.h>
+
 int id_to_idx(int id, struct rdp_connection *cons[], int conslen)
 {
   for (int i = 0; i < conslen; i++) {
@@ -39,7 +41,7 @@ int mk_next_pkt(struct rdp_connection *con, // koblingen som skal sendes over
 
   // Sekvensnummeret til første pakke er 0 (`con->ackseq` initialiseres til
   // -1 i `rdp_accept`), og generelt sender vi alltid pakken etter siste ACK
-  // vi mottokk.
+  // vi mottok.
   pkt->pktseq = con->ackseq + 1;
 
   if (payloadlen*(pkt->pktseq) >= datalen) {
@@ -67,7 +69,7 @@ int mk_next_pkt(struct rdp_connection *con, // koblingen som skal sendes over
                   + wc;
 
   // Her brukes `payloadlen` som «stride»-faktor og `pkt->pktseq` som indeks
-  // i fildata arrayet.
+  // i fildataarrayet.
   memcpy(pkt->payload, &data[payloadlen*(pkt->pktseq)], wc);
 
   return EXIT_SUCCESS;
@@ -95,34 +97,41 @@ int terminate(struct rdp_connection *con)
 
 int main(int argc, char *argv[])
 {
-  if (argc != 4) {
-    printf("Feil antall argumenter: per nå implementert for 3:\n");
-    printf("usage: %s <port> <filnavn> <N-klienter>\n", argv[0]);
-    printf("(<filnavn> er ikke i bruk ennå)");
+  if (argc != 5) {
+    printf("usage: %s <port> <filnavn> <N-klienter> <pakketap>\n", argv[0]);
     return EXIT_FAILURE;
   }
 
-  char *port  = argv[1];       // nettverksporten vi vil bruke
-  const int N = atoi(argv[3]); // maks klienter
-  int n       = 0;             // faktisk antall klienter
+  char *port  = argv[1];               // nettverksporten vi vil bruke
+  const int N = atoi(argv[3]);         // maks klienter
+  set_loss_probability(atof(argv[4])); // sett pakketapsannsynlighet
+  int n       = 0;                     // faktisk antall klienter
 
   // MIDLERTIDIGE DATAVERDIER: {
+  // TODO: Lag funksjon som kapper opp på forhånd filen inn i pakker. Kanskje
+  // samle disse inn i et array indeksert av sekvensnummer, eller no’?
   uint8_t data[] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXsssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssTTT";
   size_t datalen = 2004;
   // }
 
-  int listen_fd;                   // fildesk. til nettverksstøpsel vi avlytter
-  struct rdp_connection *cons[N];  // holder koblinger til alle klienter
-  int idx;                         // indeks til en forbindelse i `cons[]`
-
-  // TODO: Lag funksjon som kapper opp på forhånd filen inn i pakker. Kanskje
-  // samle disse inn i et array indeksert av sekvensnummer, eller no’?
+  int listen_fd;                  // fildesk. til nettverksstøpsel vi avlytter
+  struct rdp_connection *cons[N]; // holder koblinger til alle klienter
+  int idx;                        // indeks til en forbindelse i `cons[]`
 
   printf("Starter server.\n");
+
+  // LISTEN:
 
   // Oppretter nettverksstøpsel som det skal lyttes på
   listen_fd = rdp_listen(port);
   if (listen_fd == EXIT_FAILURE) return EXIT_FAILURE; 
+
+  // «POLL» OPPSETT:
+
+  struct pollfd pfds[1];
+  pfds->fd = listen_fd;
+  pfds->events = POLLIN;
+  int pkt_pending;
 
   // Nuller ut arrayet som skal holde alle koblingene våre.
   memset(&cons, '\0', sizeof cons);
@@ -130,19 +139,26 @@ int main(int argc, char *argv[])
   struct rdp pkt_buf;
   struct rdp_connection *new_con;
 
-  for (int i = 0; i < 1000; i++) { // MIDLERTIDIG
+  for (int i = 0; i < 10000000; i++) { // MIDLERTIDIG
 
-    // SNIKTITT PÅ PAKKE:
+    // Bruker 100 ms til å sjekke om det venter noen pakker. TODO: jeg er
+    // usikker på om det er ideelt å bruke `poll()` her, med hensyn på CPU-en?
+    pkt_pending = poll(pfds, 1, 100);
+    if (rdp_error(pkt_pending, "server: poll")) return EXIT_FAILURE;
 
-    // TODO: dette blokkerer I/O, og bør heller implementeres med `select()`,
-    // eller så må `recvfrom()` i `rdp_peek()` endes til ikke-blokkerende.
-    rdp_peek(listen_fd, &pkt_buf, NULL, NULL);
-    idx = id_to_idx(pkt_buf.senderid, cons, N);
+    if (pkt_pending) {
+      // SNIKTITT PÅ PAKKE:
+      // TODO: dette blokkerer I/O, og bør heller implementeres med
+      // `select()`, eller så må `recvfrom()` i `rdp_peek()` endes til
+      // ikke-blokkerende.
+      rdp_peek(listen_fd, &pkt_buf, NULL, NULL);
+      idx = id_to_idx(pkt_buf.senderid, cons, N);
+    }
 
     // TOLKER PAKKE:
 
     // Hvis forbindelsesforespørsel:
-    if (pkt_buf.flag == 0x01) {
+    if (pkt_pending && pkt_buf.flag == 0x01) {
       printf("server: forbindelsesforespørsel mottatt\n");
       // Godta forbindelse om bare hvis etterspurt ID ikke er i bruk,
       // og det er plass. Bruker `n` for å telle plassene.
@@ -162,14 +178,14 @@ int main(int argc, char *argv[])
     }
 
     // Hvis forbindelsesavslutting:
-    else if (idx > -1 && pkt_buf.flag == 0x02) {
+    else if (pkt_pending && idx > -1 && pkt_buf.flag == 0x02) {
       printf("server: mottok forbindelsesavslutting. Terminerer kobling\n");
       free(cons[idx]);
       cons[idx] = NULL;
     }
 
     // Hvis ACK:
-    else if (idx > -1 && pkt_buf.flag == 0x08) {
+    else if (pkt_pending && idx > -1 && pkt_buf.flag == 0x08) {
       // Per nå, fikser `rdp_read()` dette. TODO: skille ut i egen funksjon?
       printf("server: mottokk ACK %d fra %d\n",
              pkt_buf.ackseq, ntohl(cons[idx]->recvid));
@@ -187,7 +203,7 @@ int main(int argc, char *argv[])
     } 
 
     // Hvis annen pakke:
-    else if (idx > -1) {
+    else if (pkt_pending && idx > -1) {
       // Øh ... dette bør ikke skje? TODO: «rdp_kast_pakke()», eller noe
       // sånt? Kan eventuelt modde `rdp_read()` funksjonen.
       int rc = recv(cons[idx]->sockfd, &pkt_buf, sizeof pkt_buf, 0);
@@ -219,10 +235,10 @@ int main(int argc, char *argv[])
     if (n == N) {
 
       // Sjekker om vi har tjent `N` klienter og terminert alle forbindelser
-      // ved å se om koblings arrayet `cons[]` kun har NULL pekere.
+      // ved å se om koblingsarrayet `cons[]` kun har NULL pekere.
       int j = 0;
       while ( j < N && cons[j] == NULL ) j++; 
-      if (j + 1 == N) {
+      if (j == N) {
         
         // AVSLUTT. FRIGJØR MINNE.
 

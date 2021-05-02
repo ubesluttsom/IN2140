@@ -8,6 +8,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "send_packet.h"
+
 #define TRUE 1
 #define FALSE 0
 

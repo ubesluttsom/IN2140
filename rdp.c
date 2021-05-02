@@ -1,4 +1,5 @@
 #include "rdp.h"
+#include "send_packet.h"
 
 #define RED "\e[0;31m"
 #define GRN "\e[0;32m"
@@ -98,9 +99,9 @@ struct rdp_connection *rdp_accept(int sockfd, int accept, int assign_id)
   pkt.recvid   = ((struct rdp *)&buf)->senderid;
   // TODO: metadata felt må fylles inn ved avslag på kobling:
   // pkt.metadata = accept ? 0x0 : <grunn til avslag>;
-  wc = sendto(sockfd, (void *)&pkt, sizeof pkt, 0,
-                  (struct sockaddr *)&sender, senderlen);
-  if (rdp_error(wc, "rdp_accept: sendto")) return NULL; 
+  wc = send_packet(sockfd, (void *)&pkt, sizeof pkt, 0,
+                   (struct sockaddr *)&sender, senderlen);
+  if (rdp_error(wc, "rdp_accept: send_packet")) return NULL; 
 
   // Hvis vi aksepterer, returnerer vi en ny kobling; ellers NULL.
   if (accept) {
@@ -212,9 +213,9 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
   pkt.flag     = 0x01;
   pkt.senderid = htonl(assign_id);
   pkt.recvid   = htonl(0);
-  wc = sendto(sockfd, (void *)&pkt, sizeof pkt, 0,
-              (struct sockaddr *)res->ai_addr, res->ai_addrlen);
-  if (rdp_error(wc, "rdp_connect: sendto")) return NULL; 
+  wc = send_packet(sockfd, (void *)&pkt, sizeof pkt, 0,
+                   (struct sockaddr *)res->ai_addr, res->ai_addrlen);
+  if (rdp_error(wc, "rdp_connect: send_packet")) return NULL; 
 
   // Lager RDP forbinndelsesstruktur
   con               = malloc(sizeof(struct rdp_connection));
@@ -263,9 +264,9 @@ int rdp_write(struct rdp_connection *con, struct rdp *pkt)
     return EXIT_FAILURE;
   }
 
-  wc = sendto(con->sockfd, (void *)pkt, sizeof *pkt, 0,
-                 (struct sockaddr *)con->recipient, con->recipientlen);
-  if (rdp_error(wc, "rdp_write: sendto")) return EXIT_FAILURE;
+  wc = send_packet(con->sockfd, (void *)pkt, sizeof *pkt, 0,
+                   (struct sockaddr *)con->recipient, con->recipientlen);
+  if (rdp_error(wc, "rdp_write: send_packet")) return EXIT_FAILURE;
 
   // TODO: vent på ACK. Send på nytt etter 100ms. Bør implementeres i egen
   // funksjon, tror jeg, som også oppdaterer `ackseq`. Kanskje gjøre dette
@@ -285,9 +286,9 @@ int rdp_ack(struct rdp_connection *con)
   pkt.recvid   = con->recvid;
   pkt.ackseq   = con->pktseq;
 
-  wc = sendto(con->sockfd, (void *)&pkt, sizeof pkt, 0,
-              (struct sockaddr *)con->recipient, con->recipientlen);
-  if (rdp_error(wc, "rdp_ack: sendto")) return EXIT_FAILURE;
+  wc = send_packet(con->sockfd, (void *)&pkt, sizeof pkt, 0,
+                   (struct sockaddr *)con->recipient, con->recipientlen);
+  if (rdp_error(wc, "rdp_ack: send_packet")) return EXIT_FAILURE;
   else {
     // Noterer oss hva som er siste pakke vi har ACKet, hvis vi skulle
     // motta duplikat.
@@ -338,7 +339,7 @@ void *rdp_read(struct rdp_connection *con, void *dest_buf)
 
   // Sender en ACK om pakken inneholder nyttelast
   if (((struct rdp *)&buf)->flag == 0x04) {
-    if (((struct rdp *)&buf)->pktseq <= con->ackseq && con->pktseq != 0) {
+    if (((struct rdp *)&buf)->pktseq <= con->ackseq) {
       // Hvis pakkesekvensnummeret er lavere enn siste ACK-en vi sendte,
       // sender vi forrige ACK på nytt og kaster denne pakken.
       rdp_ack(con);

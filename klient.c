@@ -4,22 +4,21 @@
 #include <time.h>
 #include <sys/time.h>
 
-
 /* MAIN */
 
 int main(int argc, char* argv[])
 {
-  if (argc != 3) {
-    printf("Feil antall argumenter: per nå kun implementert for 3:\n");
-    printf("usage: %s <IP/vertsnavn til server> <port>\n", argv[0]);
+  if (argc != 4) {
+    printf("usage: %s <servers IP/vertsnavn> <port> <pakketap>\n", argv[0]);
     return EXIT_FAILURE;
   }
 
   srand(time(NULL));
   int rnd = rand();
 
-  char* vert = argv[1];
-  char* port = argv[2];
+  char* vert = argv[1];                // nettverksaddressen til serveren
+  char* port = argv[2];                // RDPs nettverksport
+  set_loss_probability(atof(argv[3])); // sett pakketapsannsynlighet
 
   printf("Starter klient.\n");
 
