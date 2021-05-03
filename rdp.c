@@ -168,11 +168,15 @@ int rdp_listen(char *port)
 
 struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
 {
-  int rv, wc;
-  struct addrinfo hints, *res;
-  struct rdp_connection *con;
+  int rv, wc;                  // retur verdi; «write count»
+  struct addrinfo hints, *res; // variable til `getaddrinfo()`
+  struct rdp_connection *con;  // forbindelsen som skal returneres
+  int sockfd;                  // nettverksstøpselfildeskriptor
+  struct rdp pkt;              // RDP-pakke buffer
+  fd_set fds;                  // sett med fildeskriptorer til `select()`
+  struct timeval tv;           // timeout for svar fra server
 
-  // Setter hints til `getaddrinfo`
+  // Gir hint til `getaddrinfo()`
   memset(&hints, '\0', sizeof hints); 
   hints.ai_family   = AF_UNSPEC;   // spesifiserer ikke IP versjon
   hints.ai_socktype = SOCK_DGRAM;  // vi ønsker typen «datagram», for UDP
@@ -190,8 +194,6 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
   // antar at første resultat er gyldig, men ideelt bør jeg prøve alle
   // nodene før jeg gir opp.
 
-  // Lager støpselfildeskriptor
-  int sockfd;
   sockfd = socket(res->ai_family,    // bruker IP versjon fra DNS oppslaget
                   res->ai_socktype,  // blir SOCK_DGRAM, fra `hints` over
                   res->ai_protocol); // blir UDP, fra oppslaget
@@ -211,11 +213,11 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
   }
 
   // Sender forespørsel til server
-  struct rdp pkt;
   memset(&pkt, '\0', sizeof(pkt));
   pkt.flag     = RDP_REQ;
   pkt.senderid = htonl(assign_id);
   pkt.recvid   = htonl(0);
+
   wc = send_packet(sockfd, (void *)&pkt, sizeof pkt, 0,
                    (struct sockaddr *)res->ai_addr, res->ai_addrlen);
   if (rdp_error(wc, "rdp_connect: send_packet")) return NULL; 
@@ -234,17 +236,30 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
   // Trenger ikke denne lenger
   freeaddrinfo(res);
 
-  // Venter på svar fra server
+  // Venter på svar med `select()`
+  FD_ZERO(&fds);
+  FD_SET(sockfd, &fds);
+  tv.tv_sec = 1;  // timeout på 1 sek, som oppgaven ber om
+  tv.tv_usec = 0;
+  if ((rv = select(sockfd+1, &fds, NULL, NULL, &tv)) == 0) {
+    printf("%srdp_connect: timeout%s\n", RED, RESET);
+    free(con);
+    return NULL;
+  } else if (rdp_error(rv, "rdp_connect: select")) return NULL;
+
+  // Leser svar fra server
   memset(&pkt, '\0', sizeof(pkt));
   if (rdp_read(con, &pkt) == NULL) return NULL;
+
 
   rdp_print(&pkt);
   // Hvis forespørselen blir avslått, frigjør vi koblingstrukturen vi
   // konstruerte og setter pekeren til NULL.
   if (pkt.flag != RDP_ACC) { 
-    printf("%srdp_connect: forbindelse avslått av server", RED);
+    printf("%srdp_connect: forbindelse ikke opprettet", RED);
     if (pkt.metadata == NFSP_INVALID) printf(": ugyldig ID");
     if (pkt.metadata == NFSP_CONFULL) printf(": ingen kapasitet");
+    if (pkt.senderid == con->senderid) printf(": ingen server på adresse");
     printf("%s\n", RESET);
     free(con);
     con = NULL;
@@ -261,11 +276,12 @@ int rdp_write(struct rdp_connection *con, struct rdp *pkt)
   int wc;
   
   // Hvis vi ikke har mottatt en ACK på forrige pakke vi sendte, nekter denne
-  // funksjonen å skrive neste pakke. Applikasjonen som kaller må vente på
-  // en ACK på tidligere sendte pakke. (Med mindre man prøver å sende en
+  // funksjonen å skrive neste pakke. Applikasjonen som kaller må vente på en
+  // ACK på tidligere sendte pakke. (Med mindre man prøver å sende en
   // koblingsterminering, `flag==RDP_TER`; denne slipper igjennom.)
   // Kommentar: Dette er også noe jeg sjekker i server applikasjonen min,
-  //            med siden det er et formelt krav i oppgaven gjøres det her og.
+  //            med siden det er et formelt krav i oppgaven gjøres det her
+  //            og.
   if (pkt->pktseq > con->ackseq + 1 && pkt->flag != RDP_TER) {
     return EXIT_FAILURE;
   }
@@ -283,7 +299,7 @@ int rdp_write(struct rdp_connection *con, struct rdp *pkt)
 
 int rdp_ack(struct rdp_connection *con)
 {
-  int wc;
+  int wc;         // «write count»
   struct rdp pkt; // ACK-pakken vi skal sende
 
   memset(&pkt, '\0', sizeof pkt);
@@ -305,7 +321,7 @@ int rdp_ack(struct rdp_connection *con)
 
 void *rdp_read(struct rdp_connection *con, void *dest_buf)
 {
-  int rc;  // «read count»
+  int rc;                         // «read count»
   void *buf[sizeof(struct rdp)];  // hvor pakken mottas
   struct sockaddr_storage sender; // lagring for avsenders adresse
   socklen_t senderlen;            // avsenderadresse lengde

@@ -22,28 +22,41 @@ int main(int argc, char* argv[])
   int payloadlen;             // nyttelast lengde i bytes
   void *rv;                   // generisk returverdi
 
-  // OPPRETTER FIL:
-
-  FILE * output_file = fopen("kernel-file-<tilfeldig tall>", "w");
+  // Seed pseudotilfeldighet
+  srand(time(NULL));
 
 
   // KOBLER TIL SERVER:
 
-  srand(time(NULL));                     // seed pseudotilfeldighet
   con = rdp_connect(vert, port, rand()); // prøver å koble til server
   if (con == NULL) {
     printf("klient: klarte ikke opprette forbindelse til server\n");
-    fclose(output_file);  // opprydding
     rdp_close(con, TRUE); // opprydding
     return EXIT_FAILURE;
   } else printf("klient: tilkoblet server!\n");
 
 
-  // MOTTAR PAKKER
+  // OPPRETTER FIL:
+
+  // Lager (pseudo)tilfeldig filnavn
+  char file_name[sizeof("kernel-file-XXXXX")];
+  snprintf(file_name, sizeof(file_name), "%s%d", "kernel-file-", rand());
+
+  // Prøver å åpne fil for skriving
+  FILE * output_file = fopen(file_name, "wx");
+  if (output_file == NULL) {
+    rdp_error(-1, "klient");
+    fclose(output_file);  // opprydding
+    rdp_close(con, TRUE); // opprydding
+    exit(EXIT_FAILURE);
+  }
+
+
+  // MOTTAR PAKKER:
 
   bzero(&pkt, sizeof pkt); // nuller ut pakkebufferet
 
-  // Prøver å lese pakker til vi mottar et koblingsavsluttings flagg
+  // Prøver å lese pakker til vi mottar et koblingsavsluttingsflagg
   while (pkt.flag != RDP_TER) {
     rv = rdp_read(con, &pkt); // les pakke fra forbindelsen. BLOKKER I/O!
     rdp_print(&pkt);          // utskrift av pakken vi mottok
@@ -66,7 +79,7 @@ int main(int argc, char* argv[])
   printf("klient: mottok termineringsforespørsel! Avslutter\n");
 
 
-  // FRIGJØR MINNE
+  // FRIGJØR MINNE:
 
   fclose(output_file);
   rdp_close(con, TRUE);

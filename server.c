@@ -14,16 +14,6 @@ int id_to_idx(int id, struct rdp_connection *cons[], int conslen)
   return -1;
 }
 
-// size_t parse_file(char *path,            // filsti til hvor filen ligget
-//                   uint8_t *data_dest[])  // peker til hvor data skal lagres
-// {
-//   // TODO: Funksjon for å lese en fil inn i minne. Spesifikt et indeksert
-//   // array `data_dest`. Dette arrayet kan dermed brukes med en
-//   // «stride»-faktor, alla `data_dest[1000 * con->pktseq]` for å hente
-//   // nyttelasten til pakke nummer `pktseq`. Dette kan gjøres på forhånd
-//   // siden alle klienter skal sendes samme fil. RETUR: `sizeof data_dest[]`.  
-// }
-
 int mk_next_pkt(struct rdp_connection *con, // koblingen som skal sendes over
                 uint8_t data[],             // array med *alt* som skal sendes
                 size_t datalen,             // lengde på data array (bytes)
@@ -86,8 +76,10 @@ int terminate(struct rdp_connection *con)
   pkt.pktseq   = con->ackseq + 1;
 
   if (rdp_write(con, &pkt)) return EXIT_FAILURE;
-  // Frigjør minne i forbinnelsen, men IKKE lukk fildiskriptoren!
+
+  // Frigjør minne i forbindelsen, men IKKE lukk fildeskriptoren!
   if (rdp_close(con, FALSE)) return EXIT_FAILURE;
+
   return EXIT_SUCCESS;
 }
 
@@ -121,7 +113,7 @@ int main(int argc, char *argv[])
   // Åpner fil
   data_file = fopen(path, "r");
   if (data_file == NULL) {
-    rdp_error(-1, "server: parse_file");
+    rdp_error(-1, "server");
     exit(EXIT_FAILURE);
   }
 
@@ -174,9 +166,6 @@ int main(int argc, char *argv[])
 
     if (pkt_pending) {
       // SNIKTITT PÅ PAKKE:
-      // TODO: dette blokkerer I/O, og bør heller implementeres med
-      // `select()`, eller så må `recvfrom()` i `rdp_peek()` endes til
-      // ikke-blokkerende.
       rdp_peek(listen_fd, &pkt_buf, NULL, NULL);
       idx = id_to_idx(pkt_buf.senderid, cons, N);
     }
@@ -213,7 +202,7 @@ int main(int argc, char *argv[])
     // Hvis ACK:
     else if (pkt_pending && idx > -1 && pkt_buf.flag == RDP_ACK) {
       // Per nå, fikser `rdp_read()` dette. TODO: skille ut i egen funksjon?
-      printf("server: mottokk ACK %d fra %d\n",
+      printf("server: mottok ACK %d fra %d\n",
              pkt_buf.ackseq, ntohl(cons[idx]->recvid));
       rdp_read(cons[idx], &pkt_buf);
 
