@@ -19,8 +19,15 @@ int main(int argc, char* argv[])
 
   struct rdp_connection *con; // datastruktur med oppkoblingsinfo
   struct rdp pkt;             // buffer vi mottar pakker på
+  int payloadlen;             // nyttelast lengde i bytes
+  void *rv;                   // generisk returverdi
 
-  printf("Starter klient.\n");
+  // OPPRETTER FIL:
+
+  FILE * output_file = fopen("kernel-file-<tilfeldig tall>", "w");
+
+
+  // KOBLER TIL SERVER:
 
   srand(time(NULL));                     // seed pseudotilfeldighet
   con = rdp_connect(vert, port, rand()); // prøver å koble til server
@@ -36,11 +43,26 @@ int main(int argc, char* argv[])
 
   // Prøver å lese pakker til vi mottar et koblingsavsluttings flagg
   while (pkt.flag != RDP_TER) {
-    rdp_read(con, &pkt); // les pakke fra forbindelsen. BLOKKER I/O!
-    rdp_print(&pkt);     // utskrift av pakken vi mottok
+    rv = rdp_read(con, &pkt); // les pakke fra forbindelsen. BLOKKER I/O!
+    rdp_print(&pkt);          // utskrift av pakken vi mottok
+    
+    // Filtrer ut pakkene vi ikke skal skrive til fil
+    if (rv == NULL) continue;
+    if (pkt.flag != RDP_DAT) continue;
+
+    // Finner lengde på nyttelasten i pakken
+    // TODO: dette er stygt. Skille ut i egen funksjon i `rdp.c`?
+    payloadlen = pkt.metadata - sizeof(pkt.flag)   - sizeof(pkt.pktseq)
+                              - sizeof(pkt.ackseq) - sizeof(pkt.senderid)
+                              - sizeof(pkt.recvid) - sizeof(pkt.metadata);
+    for (int i = 0; i < payloadlen; i++) {
+      // Skriver nyttelast til fil, byte for byte
+      fputc(pkt.payload[i], output_file);
+    }
   }
 
   printf("klient: mottok termineringsforespørsel! Avslutter\n");
+
 
   // FRIGJØR MINNE
 

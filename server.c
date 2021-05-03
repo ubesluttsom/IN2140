@@ -102,10 +102,13 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
 
+
+  //  ARGUMENTER:
+
   char *port  = argv[1];               // nettverksporten vi vil bruke
   char *path  = argv[2];               // filsti til fil vi skal sende
   const int N = atoi(argv[3]);         // maks klienter
-  int n       = 0;                     // faktisk antall klienter
+  int n       = 0;                     // faktisk antall klienter *nå*
   set_loss_probability(atof(argv[4])); // sett pakketapsannsynlighet
 
 
@@ -130,8 +133,11 @@ int main(int argc, char *argv[])
   // Allokerer minne til all data
   data = malloc(datalen);
   
-  // Leser igjennom hele filen og skriver hver byte til data arrayet.
+  // Leser igjennom hele filen og skriver hver byte til dataarrayet.
   for (int i = 0; fread(&data[i], sizeof(uint8_t), 1, data_file); i++);
+
+  // Ferdig med filen nå
+  fclose(data_file);
 
 
   // ANDRE VARIABLER:
