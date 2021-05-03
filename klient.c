@@ -33,6 +33,8 @@ int main(int argc, char* argv[])
   con = rdp_connect(vert, port, rand()); // prøver å koble til server
   if (con == NULL) {
     printf("klient: klarte ikke opprette forbindelse til server\n");
+    fclose(output_file);  // opprydding
+    rdp_close(con, TRUE); // opprydding
     return EXIT_FAILURE;
   } else printf("klient: tilkoblet server!\n");
 
@@ -66,6 +68,7 @@ int main(int argc, char* argv[])
 
   // FRIGJØR MINNE
 
+  fclose(output_file);
   rdp_close(con, TRUE);
 
   return EXIT_SUCCESS;

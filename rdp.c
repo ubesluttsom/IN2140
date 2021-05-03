@@ -160,6 +160,9 @@ int rdp_listen(char *port)
   rv = bind(sockfd, res->ai_addr, res->ai_addrlen);
   if (rdp_error(rv, "rdp_listen: bind")) return EXIT_FAILURE;
 
+  // Ferdig med denne lenkede listen nå
+  freeaddrinfo(res);
+
   return sockfd;
 }
 
@@ -199,7 +202,8 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
   // samme som serveren -- men vi nøyer oss med en hvilkensomhelst ledig en.
   rv = bind(sockfd, res->ai_addr, res->ai_addrlen);
   if (rdp_error(rv, "rdp_connect: bind")) {
-    if (errno == 48) {
+    printf("errno == %d\n", errno);
+    if (errno == 48 || errno == 98) {
       printf("Ignorerer og antar RDP allerede er bundet til denne\n");
       printf("porten på den lokale maskinen. Lar OS-et tildele en\n");
       printf("tilfeldig annen port for denne forbindelsen.\n");
