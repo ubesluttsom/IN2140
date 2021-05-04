@@ -58,8 +58,8 @@ int main(int argc, char* argv[])
 
   // Prøver å lese pakker til vi mottar et koblingsavsluttingsflagg
   while (pkt.flag != RDP_TER) {
-    rv = rdp_read(con, &pkt); // les pakke fra forbindelsen. BLOKKER I/O!
-    rdp_print(&pkt);          // utskrift av pakken vi mottok
+    rv = rdp_read(con->sockfd, &con, 1, &pkt); // les pakke. BLOKKER I/O.
+    rdp_print(&pkt);                           // utskrift av pakken vi mottok
     
     // Filtrer ut pakkene vi ikke skal skrive til fil
     if (rv == NULL) continue;

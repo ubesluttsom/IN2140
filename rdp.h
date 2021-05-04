@@ -21,8 +21,8 @@
 #define RDP_ACC 0x10 // RDP_ACC(EPT) aksepterer en forbindelsesforespørsel.
 #define RDP_DEN 0x20 // RDP_DEN(IED) avslår forbindelsesforespørsel.    
 
-#define NFSP_CONFULL -1 // avslår forbindelse grunnet kapasitet
-#define NFSP_INVALID -2 // avslår forbindelse grunnet ugyldig sender ID
+#define RDP_CONFULL -1 // avslår forbindelse grunnet kapasitet
+#define RDP_INVALID -2 // avslår forbindelse grunnet ugyldig sender ID
 
 struct rdp {  
   unsigned char flag;       // «Flagg som definerer forskjellige typer pakker»
@@ -46,13 +46,24 @@ struct rdp_connection {
   socklen_t recipientlen;             // lengde på adresse
 };
 
-struct rdp_connection *rdp_accept(int sockfd, int accept, int assign_id);
+struct rdp_connection *rdp_accept(int sockfd,
+                                  struct rdp_connection *cons[],
+                                  int conslen,
+                                  int accept,
+                                  int assign_id);
 struct rdp_connection *rdp_connect(char* vert, char *port, int assign_id);
 
 int   rdp_listen(char *port);
-int   rdp_write(struct rdp_connection *con, struct rdp *pakke);
+int   rdp_send(struct rdp_connection *con, struct rdp *pakke);
+int rdp_write(struct rdp_connection *cons[], // koblinger det skal sendes over
+              int N,                         // `cons[]` lengde
+              uint8_t data[],                // array med data som skal sendes
+              size_t datalen);               // lengde på data array (bytes)
+int rdp_terminate(struct rdp_connection *cons[],
+                  int conslen,
+                  struct rdp_connection *con);
 int   rdp_ack(struct rdp_connection *con);
-void *rdp_read(struct rdp_connection *con, void *dest_buf);
+void *rdp_read(int sockfd, struct rdp_connection *cons[], int conslen, void *dest_buf);
 void *rdp_peek(int sockfd, void *dest_buf,
                struct sockaddr_storage *dest_addr, socklen_t *dest_addrlen);
 int   rdp_close(struct rdp_connection *con, int close_sockfd);
