@@ -32,7 +32,10 @@ struct rdp {
   int           senderid;   // «Avsenderens forbindelses-ID i [Big-Endian]»
   int           recvid;     // «Mottakerens forbindelses-ID i [Big-Endian]»
   int           metadata;   // total datapakkelengde, eller `RDP_DEN` årsak
-  uint8_t payload[1000];    // Nyttelast. TODO: «flexible array member»
+  uint8_t payload[1000];    // Nyttelast.
+  // ^ her har jeg bevisst ikke brukt «flexible array member», for å gjøre
+  // koden mindre kompleks. Jeg sender kun bytes med nyttig data over nettet,
+  // men jeg fikser det heller i `rdp_write()` og argumentet til `sendto()`.
 }__attribute__((packed));
 // ^ pakker tett, siden denne structen skal sendes ut på verdensveven
 
@@ -59,13 +62,11 @@ int rdp_write(struct rdp_connection *cons[], // koblinger det skal sendes over
               int N,                         // `cons[]` lengde
               uint8_t data[],                // array med data som skal sendes
               size_t datalen);               // lengde på data array (bytes)
-int rdp_terminate(struct rdp_connection *cons[],
-                  int conslen,
-                  struct rdp_connection *con);
+int rdp_terminate(struct rdp_connection *cons[], int conslen, struct rdp_connection *con);
 int   rdp_ack(struct rdp_connection *con);
-void *rdp_read(int sockfd, struct rdp_connection *cons[], int conslen, void *dest_buf);
-void *rdp_peek(int sockfd, void *dest_buf,
-               struct sockaddr_storage *dest_addr, socklen_t *dest_addrlen);
+size_t rdp_read(int sockfd, struct rdp_connection *cons[], int conslen, void *dest_buf);
+size_t rdp_peek(int sockfd, void *dest_buf, struct sockaddr_storage *dest_addr, socklen_t *dest_addrlen);
+size_t rdp_payloadlen(struct rdp *pkt);
 int   rdp_close(struct rdp_connection *con, int close_sockfd);
 int   rdp_error(int rv, char *msg);
 int   rdp_print(struct rdp *pakke);

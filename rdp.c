@@ -17,21 +17,14 @@ int rdp_print(struct rdp *pkt)
   printf("metadata==0x%x, ",      pkt->metadata);
 
   // Passer på å terminere `payload` med `\0` før utskrift. Her lager jeg
-  // en ny strengbuffer som jeg kopierer over til. TODO: tilpasse dette til
-  // «flexible array member».
-  int payloadlen;
-  if (pkt->flag == RDP_DAT) {
-    payloadlen = pkt->metadata - sizeof(pkt->flag)   - sizeof(pkt->pktseq)
-                               - sizeof(pkt->ackseq) - sizeof(pkt->senderid)
-                               - sizeof(pkt->recvid) - sizeof(pkt->metadata);
-  } else payloadlen = 0;
-  char str[payloadlen + 1];
-  str[payloadlen] = '\0';
-  strncpy(str, (char *)pkt->payload, payloadlen);
+  // en ny strengbuffer som jeg kopierer over til.
+  char str[rdp_payloadlen(pkt) + 1];
+  str[rdp_payloadlen(pkt)] = '\0';
+  strncpy(str, (char *)pkt->payload, rdp_payloadlen(pkt));
 
   printf("payload==\"%s\" }\n", str);
 
-  return EXIT_SUCCESS;
+  return 1;
 }
 
 int rdp_printc(struct rdp_connection* con)
@@ -43,16 +36,16 @@ int rdp_printc(struct rdp_connection* con)
   printf("recipient->addr==%s, ", _get_recipient_addr(s, con));
   printf("recipient->port==%s, ", _get_recipient_port(s, con));
   printf("recipientlen==%d }\n", con->recipientlen);
-  return EXIT_SUCCESS;
+  return 1;
 }
 
 int rdp_error (int rv, char *msg) {
   if (rv < 0) {
     fprintf(stderr, "%s%s: %s%s\n", RED, msg, strerror(errno), RESET);
     // TODO: oppvask
-    return EXIT_FAILURE;
+    return 1;
   }
-  return EXIT_SUCCESS;
+  return 0;
 }
 
 struct rdp_connection *rdp_accept(int sockfd,
@@ -62,11 +55,16 @@ struct rdp_connection *rdp_accept(int sockfd,
                                   int assign_id)
 {
   int rc, wc;                        // read / write count
-  void *buf[sizeof(struct rdp) + 1]; // lest data (pluss nullbyte)
+  void *buf[sizeof(struct rdp)];      // lest data
   struct sockaddr_storage sender;    // avsender på forespørsel
   socklen_t senderlen;               // lengde på adresse
   struct rdp pkt;                    // svar på forespørsel
   struct rdp_connection *new_con;    // den potensielle nye forbindelsen
+
+  // Sjekker om første pakke i nettverksstøpselet er en forespørsel;
+  // hvis ikke, returneres NULL
+  rdp_peek(sockfd, &buf, NULL, NULL);
+  if (((struct rdp *)&buf)->flag != RDP_REQ) return NULL;
   
   // Setter buffer `buf` som forespørsel skal mottas på til \0
   memset(&buf, '\0', sizeof buf);
@@ -75,11 +73,6 @@ struct rdp_connection *rdp_accept(int sockfd,
   // svaradressen. Fjerner informasjonen som er der fra før.
   memset(&sender, '\0', sizeof sender);
   senderlen = sizeof sender;
-
-  // Sjekker om første pakke i nettverksstøpselet er en forespørsel;
-  // hvis ikke, returneres NULL
-  rdp_peek(sockfd, &buf, NULL, NULL);
-  if (((struct rdp *)&buf)->flag != RDP_REQ) return NULL;
 
   // Hvis det ønskes å opprette forbindelse må det først sjekkes om
   // etterspurt ID er ledig.
@@ -100,14 +93,6 @@ struct rdp_connection *rdp_accept(int sockfd,
   rc = recvfrom(sockfd, buf, sizeof buf, 0,
                 (struct sockaddr *)&sender, &senderlen);
   if (rdp_error(rc, "rdp_accept: recvfrom")) return NULL;
-
-  // Dobbelsjekker pakkeflagg
-  if (((struct rdp *)&buf)->flag != RDP_REQ) {
-    // Dette skal ikke skje. Bør ha blitt sjekket før kallet på
-    // `rdp_accept()`.
-    printf("rdp_accept: ikke en forespørsel. Pakke kastes\n");
-    return NULL;
-  }
 
   // Sender forespørselssvar
   memset(&pkt, '\0', sizeof(pkt));
@@ -163,22 +148,22 @@ int rdp_listen(char *port)
   if (rv != 0) {
     fprintf(stderr, "%srdp_listen: getaddrinfo: %s%s\n",
             RED, gai_strerror(rv), RESET);
-    return EXIT_FAILURE;
+    return 0;
   }
 
   // Lager støpselfildeskriptor. Bruker argumentene vi fylte inn i `hints` over
   sockfd = socket(res->ai_family, res->ai_socktype, 0);
-  if (rdp_error(sockfd, "rdp_listen: socket")) return EXIT_FAILURE;
+  if (rdp_error(sockfd, "rdp_listen: socket")) return 0;
 
   // Prøver å igjenbruke porten, nyttig hvis vi kjører serveren flere
   // ganger uten å lukke støpselet. (MEN! skaper kluss om vi prøver å
   // kjøre flere servere på samme maskin.)
   rv = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int));
-  if (rdp_error(rv, "rdp_listen: setsockopt")) return EXIT_FAILURE;
+  if (rdp_error(rv, "rdp_listen: setsockopt")) return 0;
 
   // Binder UDP-støpselet til nettverksadressen vi har funnet.
   rv = bind(sockfd, res->ai_addr, res->ai_addrlen);
-  if (rdp_error(rv, "rdp_listen: bind")) return EXIT_FAILURE;
+  if (rdp_error(rv, "rdp_listen: bind")) return 0;
 
   // Ferdig med denne lenkede listen nå
   freeaddrinfo(res);
@@ -241,7 +226,7 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
                    (struct sockaddr *)res->ai_addr, res->ai_addrlen);
   if (rdp_error(wc, "rdp_connect: send_packet")) return NULL; 
 
-  // Lager RDP forbinndelsesstruktur
+  // Lager RDP forbindelsesstruktur
   con               = malloc(sizeof(struct rdp_connection));
   con->recipient    = malloc(sizeof(struct sockaddr_storage));
   con->recipientlen = res->ai_addrlen;
@@ -293,23 +278,27 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
 
 int rdp_send(struct rdp_connection *con, struct rdp *pkt)
 {
-  int wc;
+  int wc; // «write count»
   
   // Hvis vi ikke har mottatt en ACK på forrige pakke vi sendte, nekter denne
   // funksjonen å skrive neste pakke. Applikasjonen som kaller må vente på en
-  // ACK på tidligere sendte pakke. (Med mindre man prøver å sende en
-  // koblingsterminering, `flag==RDP_TER`; denne slipper igjennom.)
+  // ACK på tidligere sendte pakke. (Med mindre man prøver å sende noe annet
+  // enn en datapakke.)
   if (pkt->flag == RDP_DAT && pkt->pktseq % 255 != (con->ackseq + 1) % 255) {
-    return EXIT_FAILURE;
+    return 0;
   }
 
-  wc = send_packet(con->sockfd, (void *)pkt, sizeof *pkt, 0,
-                   (struct sockaddr *)con->recipient, con->recipientlen);
-  if (rdp_error(wc, "rdp_send: send_packet")) return EXIT_FAILURE;
+  // Finner ut akkurat hvor mye data vi trenger å sende
+  if (pkt->flag == RDP_DAT) wc = pkt->metadata;
+  else wc = sizeof(*pkt) - sizeof(pkt->payload);
 
-  // TODO: vent på ACK. Send på nytt etter 100ms. Bør implementeres i egen
-  // funksjon, tror jeg, som også oppdaterer `ackseq`. Kanskje gjøre dette
-  // i applikasjonslaget?
+  wc = send_packet(con->sockfd,
+                   (void *)pkt,
+                   wc,
+                   0,
+                   (struct sockaddr *)con->recipient, 
+                   con->recipientlen);
+  if (rdp_error(wc, "rdp_send: send_packet")) return 0;
 
   // Øker pakkesekvensnummeret i koblingen, men bare hvis pakken ikke er et
   // duplikat av en tidligere ikke-ACKet pakke
@@ -317,7 +306,7 @@ int rdp_send(struct rdp_connection *con, struct rdp *pkt)
     con->pktseq += 1;
   }
 
-  return EXIT_SUCCESS;
+  return 1;
 }
 
 int rdp_write(struct rdp_connection *cons[], // koblinger det skal sendes over
@@ -325,22 +314,25 @@ int rdp_write(struct rdp_connection *cons[], // koblinger det skal sendes over
               uint8_t data[],                // array med data som skal sendes
               size_t datalen)                // lengde på data array (bytes)
 {
-  // TODO: Funksjon som lager neste pakke som skal sendes over kobling til
-  // klient. Denne bør kanskje flyttes til transportlaget, og slås sammen
-  // med `rdp_write` i `rdp.c`?
+  int wc, null_ptrs;     // «write count»; teller antall NULL pekere i array
+  struct rdp pkt;        // pakke som skal sendes
+  size_t max_payloadlen; // lengde på payload i RDP pakke
+  int new_pktseq;        // pakkesekvensnummer på den nye pakken
 
-  int wc;            // «write count»
-  struct rdp pkt;    // pakke som skal sendes
-  size_t payloadlen; // lengde på payload i RDP pakke
-  int new_pktseq;    // pakkesekvensnummer på den nye pakken
+  // Definerer nyttelastlengde.
+  max_payloadlen = sizeof(pkt.payload);
 
-  // Henter nyttelastlengde. TODO: endre til «flexible array member».
-  payloadlen = sizeof(pkt.payload);
+  // Teller antall NULL-pekere, for å avgjøre returverdi
+  null_ptrs = 0;
 
   // Prøver nå å sende «data» til alle koblinger.
   for (int j = 0; j < conslen; j++) {
     // Hopp over ikke-eksisterende koblinger
-    if (cons[j] == NULL) continue;
+    if (cons[j] == NULL) {
+      null_ptrs++;
+      continue;
+    }
+
     bzero(&pkt, sizeof pkt);
 
     // Lager neste pakke som vi ønsker å sende:
@@ -350,17 +342,18 @@ int rdp_write(struct rdp_connection *cons[], // koblinger det skal sendes over
     // vi mottok. Hvis vi må sende flere pakker enn 255, begynner vi ACK
     // sekvensen fra 0 igjen. `con->pktseq` er en `int` og kan dermed holde
     // mye høyere verdier, og vi utnytter dette med modulo. Med denne
-    // løsningen får vi en øvre filstørrelse på 255*1000*INT_MAX bytes > 547 TB
-    // (på et 32-bit system, eller mer); dette er mer enn nok. Siden dette er
-    // «stop-and-wait» kunne jeg egentlig bare latt `ackseq` alternert mellom 0
-    // og 1, men jeg foretrekker dette siden feilmeldinger og utskrift virker
-    // mer intuitivt (for meg).
+    // løsningen får vi en øvre filstørrelse på 255*1000*INT_MAX bytes > 547
+    // TB (på et 32-bit system, eller mer); dette er mer enn nok. Siden dette
+    // er «stop-and-wait» kunne jeg egentlig bare latt `ackseq` alternert
+    // mellom 0 og 1, men jeg foretrekker dette siden feilmeldinger og
+    // utskrift virker mer intuitivt (for meg).
 
+    // Hvis forrige pakke er ACKet, lag neste pakke (ellers lag forrige på
+    // nytt)
     new_pktseq = cons[j]->pktseq;
-    // Hvis forrige pakke er ACKet, lag neste pakke (ellers lag forrige på nytt)
     if (cons[j]->pktseq % 255 == cons[j]->ackseq % 255) new_pktseq++;
 
-    if (payloadlen*new_pktseq >= datalen) {
+    if (max_payloadlen*new_pktseq >= datalen) {
       // Hvis «pakker sendt» ganger lengden på nyttelasten overskrider totalt
       // antall bytes vi ønsker å sende (`datalen`) skal neste pakke
       // terminere forbindelsen
@@ -368,13 +361,13 @@ int rdp_write(struct rdp_connection *cons[], // koblinger det skal sendes over
              ntohl(cons[j]->recvid));
       rdp_terminate(cons, conslen, cons[j]);
       continue;
-    } else if (payloadlen*new_pktseq + payloadlen > datalen) {
+    } else if (max_payloadlen*new_pktseq + max_payloadlen > datalen) {
       // Sjekker om vi står i fare for å overskride `data` arrayet. Vi
       // tilpasser «write count» deretter.
-      wc = datalen - payloadlen*new_pktseq;
+      wc = datalen - max_payloadlen*new_pktseq;
     } else {
       // Ellers, fyller vi ut hele nyttelasten til pakken.
-      wc = payloadlen;
+      wc = max_payloadlen;
     }
 
     // Lager pakke
@@ -382,21 +375,24 @@ int rdp_write(struct rdp_connection *cons[], // koblinger det skal sendes over
     pkt.senderid = cons[j]->senderid;
     pkt.recvid   = cons[j]->recvid;
     pkt.pktseq   = new_pktseq % 255;
-    // Finner total pakkelengde. TODO: endre til «flexible array member».
-    pkt.metadata =   sizeof(pkt.flag)   + sizeof(pkt.pktseq)
-                   + sizeof(pkt.ackseq) + sizeof(pkt.senderid)
-                   + sizeof(pkt.recvid) + sizeof(pkt.metadata)
-                   + wc;
+    // Finner total pakkelengde.
+    pkt.metadata =   sizeof(pkt.flag)     + sizeof(pkt.pktseq)
+                   + sizeof(pkt.ackseq)   + sizeof(pkt.unassigned)
+                   + sizeof(pkt.senderid) + sizeof(pkt.recvid)
+                   + sizeof(pkt.metadata) + wc;
 
-    // Her brukes `payloadlen` som «stride»-faktor og `new_pktseq` som
+    // Her brukes `max_payloadlen` som «stride»-faktor og `new_pktseq` som
     // indeks i fildataarrayet.
-    memcpy(pkt.payload, &data[payloadlen*new_pktseq], wc);
+    memcpy(pkt.payload, &data[max_payloadlen*new_pktseq], wc);
 
     // Sender pakke:
     rdp_send(cons[j], &pkt);
   }
 
-  return EXIT_SUCCESS;
+  // Hvis koblingsarrayet består kun av NULL-pekere, er dette et tegn på at
+  // dette funksjonskallet ikke har sendt noen pakker. Vi returnerer deretter.
+  if (null_ptrs == conslen) return 0;
+  else return 1;
 }
 
 int rdp_terminate(struct rdp_connection *cons[],
@@ -417,10 +413,10 @@ int rdp_terminate(struct rdp_connection *cons[],
 
   // Fjern denne koblingen fra lista
   while (cons[i] != con && i < conslen) i++; // finner indeks til `con`
-  if (i >= conslen) return EXIT_FAILURE;     // fant ikke indeks i array
+  if (i >= conslen) return 0;                // fant ikke indeks i array
   else cons[i] = NULL;                       // ellers, fjern kobling
 
-  return EXIT_SUCCESS;
+  return 1;
 }
 
 int rdp_ack(struct rdp_connection *con)
@@ -436,38 +432,43 @@ int rdp_ack(struct rdp_connection *con)
 
   wc = send_packet(con->sockfd, (void *)&pkt, sizeof pkt, 0,
                    (struct sockaddr *)con->recipient, con->recipientlen);
-  if (rdp_error(wc, "rdp_ack: send_packet")) return EXIT_FAILURE;
+  if (rdp_error(wc, "rdp_ack: send_packet")) return 0;
   else {
     // Noterer oss hva som er siste pakke vi har ACKet, hvis vi skulle
     // motta duplikat.
     con->ackseq = con->pktseq % 255;
-    return EXIT_SUCCESS;
+    return 1;
   }
 }
 
-void *rdp_read(int sockfd,
-               struct rdp_connection *cons[],
-               int conslen,
-               void *dest_buf)
+size_t rdp_read(int sockfd,
+                struct rdp_connection *cons[],
+                int conslen,
+                void *dest_buf)
 {
-  int rc;                         // «read count»
-  void *buf[sizeof(struct rdp)];  // hvor pakken mottas
+  int rc, wc;                     // «read/write count»
+  uint8_t buf[sizeof(struct rdp)];   // hvor pakken mottas
   struct sockaddr_storage sender; // lagring for avsenders adresse
   socklen_t senderlen;            // avsenderadresse lengde
   struct rdp_connection *con;     // peker til avsenders forbindelse
 
-  // Nuller buffer `buf` som pakke skal mottas på
+  // Sjekker om første pakke i nettverksstøpselet er en forespørsel;
+  // hvis det er tilfelle, returneres 0
+  rdp_peek(sockfd, &buf, NULL, NULL);
+  if (((struct rdp *)&buf)->flag == RDP_REQ) return 0;
+
+  // Nuller buffer `buf` som pakke skal mottas på.
   bzero(&buf, sizeof buf);
 
   // Informasjon om avsender skal lagres i `recipient`; dette er altså
   // svaradressen. Fjerner informasjonen som er der fra før.
   bzero(&sender, sizeof sender);
   senderlen = sizeof sender;
-  
-  // Mottar pakke (BLOKKERER I/O!)
+
+  // Mottar pakke, *for real* denne gangen (BLOKKERER I/O!)
   rc = recvfrom(sockfd, buf, sizeof buf, 0,
                 (struct sockaddr *)&sender, &senderlen);
-  if (rdp_error(rc, "rdp_read: recvfrom")) return NULL;
+  if (rdp_error(rc, "rdp_read: recvfrom")) return 0;
 
   // Finner avsenders forbindelse
   con = NULL;
@@ -477,38 +478,33 @@ void *rdp_read(int sockfd,
     if (cons[i]->recvid == ((struct rdp *)&buf)->senderid) con = cons[i];
   }
 
-  // Er avsender ukjent, kaster vi pakken
+  // Er avsender ukjent, gjøres ingenting
   if (con == NULL) {
-    return NULL;
-  }
+    return 0;
+  } 
 
-  // Hvis `dest_buf` pekeren er `NULL`, skriver vi ut pakken
-  if (dest_buf == NULL) {
-    // Lager buffer for avsenderstreng
-    char s[INET6_ADDRSTRLEN];
-    // Printer pakke
-    printf("rdp_read: recvfrom: %d bytes from \"%s\":\n",
-           rc, _get_recipient_addr(s, con));
-    rdp_print((struct rdp *)&buf);
-  } else {
-    // Skriver pakke til returbufferet
-    memcpy(dest_buf, &buf, sizeof(struct rdp));
-  }
-
-  // Sender en ACK om pakken inneholder nyttelast
+  // Om pakken inneholder nyttelast
   if (((struct rdp *)&buf)->flag == RDP_DAT) {
-    if (/* ((struct rdp *)&buf)->pktseq <= con->ackseq && */
-        ((struct rdp *)&buf)->pktseq != (con->ackseq + 1) % 255) {
+
+    if (dest_buf != NULL) {
+      // Skriver data til returbufferet
+      wc = rdp_payloadlen((struct rdp *)&buf);
+      memcpy(dest_buf, ((struct rdp *)&buf)->payload, wc);
+    }
+
+    // Sender en ACK
+    if (((struct rdp *)&buf)->pktseq != (con->ackseq + 1) % 255) {
       // Hvis pakkesekvensnummeret er lavere enn siste ACK-en vi sendte,
       // sender vi forrige ACK på nytt og kaster denne pakken.
       rdp_ack(con);
       printf("%srdp_read: mottok duplikat. Gjentar ACK på forrige pakke.%s\n",
              RED, RESET);
-      return NULL;
+      return 0;
     } else {
       // Ellers oppdateres `pktseq` og vi sender ACK på den nye pakken.
       con->pktseq += 1;
       rdp_ack(con);
+      return wc;
     }
   }
 
@@ -518,24 +514,28 @@ void *rdp_read(int sockfd,
            ((struct rdp *)&buf)->ackseq, ntohl(con->recvid));
     // Oppdaterer `ackseq` i denne oppkoblingen.
     con->ackseq = ((struct rdp *)&buf)->ackseq;
+    return 0;
   }
 
   // Hvis forbindelsesavslutting:
-  if (((struct rdp *)&buf)->flag == RDP_TER) {
+  else if (((struct rdp *)&buf)->flag == RDP_TER) {
     printf("server: mottok forbindelsesavslutting. Terminerer kobling\n");
     rdp_terminate(cons, conslen, con);
+    return 0;
   }
-
-  return dest_buf;
+  
+  return 0; // <-- Bør ikke nåes 
 }
 
 // *Nesten* samme funksjon som `rdp_read`, men vi bare tar en titt på neste
-// pakke, heller enn å faktisk fjerne den fra nettverksstøpselet.
-void *rdp_peek(int sockfd, void *dest_buf, struct sockaddr_storage *dest_addr,
-               socklen_t *dest_addrlen)
+// pakke, heller enn å faktisk fjerne den fra nettverksstøpselet. Vi skriver
+// også HELE pakken til `dest_buf`, ikke bare nyttelasten.
+size_t rdp_peek(int sockfd, void *dest_buf,
+                struct sockaddr_storage *dest_addr,
+                socklen_t *dest_addrlen)
 {
-  int rc;  // «read count»
-  void *buf[sizeof(struct rdp)];  // hvor pakken mottas
+  int rc, wc;                     // «read/write count»
+  uint8_t buf[sizeof(struct rdp)];  // hvor pakken mottas
   struct sockaddr_storage sender; // lagring for avsenders adresse
   socklen_t senderlen;            // avsenderadresse lengde
 
@@ -554,7 +554,7 @@ void *rdp_peek(int sockfd, void *dest_buf, struct sockaddr_storage *dest_addr,
                 MSG_PEEK,   // <-- vi tar bare en titt
                 (struct sockaddr *)&sender,
                 &senderlen);
-  if (rdp_error(rc, "rdp_peek: recvfrom")) return NULL;
+  if (rdp_error(rc, "rdp_peek: recvfrom")) return 0;
 
   if (dest_addr != NULL) {
     // Noterer ned avsenders adresse. Hvis vi ikke har noe sted å notere
@@ -563,17 +563,26 @@ void *rdp_peek(int sockfd, void *dest_buf, struct sockaddr_storage *dest_addr,
     *dest_addrlen = senderlen;
   }
 
-  // Hvis `dest_buf` pekeren er `NULL`, skrives pakken ut
-  if (dest_buf == NULL) {
-    // Printer pakke
-    printf("rdp_peek: recvfrom: %d bytes:\n", rc);
-    rdp_print((struct rdp *)&buf);
-  } else {
-    // Skriver pakke til returbufferet
-    memcpy(dest_buf, &buf, sizeof(struct rdp));
+  if (dest_buf != NULL) {
+    // Skriver data til returbufferet
+    wc = rc;
+    memcpy(dest_buf, &buf, wc);
+    return wc;
   }
 
-  return dest_buf;
+  return 0;
+}
+
+size_t rdp_payloadlen(struct rdp *pkt)
+{
+  if (pkt == NULL) return 0;
+  if (pkt->flag != RDP_DAT) return 0;
+  else return pkt->metadata - sizeof(pkt->flag)     - sizeof(pkt->pktseq)
+                            - sizeof(pkt->ackseq)   - sizeof(pkt->unassigned)
+                            - sizeof(pkt->senderid) - sizeof(pkt->recvid)
+                            - sizeof(pkt->metadata);
+  // TODO: deler av uttrykket over kan avgjøres ved kompilering, så man kan
+  //       sikkert spare et par klokkesykler med en #define makro.
 }
 
 int rdp_close(struct rdp_connection *con, // kobling som skal lukke
@@ -583,8 +592,8 @@ int rdp_close(struct rdp_connection *con, // kobling som skal lukke
     if (close_sockfd) close(con->sockfd);
     free(con->recipient);
     free(con);
-    return EXIT_SUCCESS;
-  } else return EXIT_FAILURE;
+    return 1;
+  } else return 0;
 }
 
 
@@ -601,14 +610,14 @@ void *_get_addr(struct sockaddr_storage *ss) {
   }
 }
 
-// Henter ut nettverksaddressen til en forbinnelse, som leselig streng.
+// Henter ut nettverksadressen til en forbindelse, som leselig streng.
 const char *_get_recipient_addr(char *s, struct rdp_connection *con) {
   const char* rv = inet_ntop(con->recipient->ss_family, _get_addr(con->recipient), s, sizeof s);
   if (rv == NULL) rdp_error(-1, "_get_recipient_addr: inet_ntop");
   return rv;
 }
 
-// Henter ut nettverksporten til en forbinnelse, som leselig streng.
+// Henter ut nettverksporten til en forbindelse, som leselig streng.
 const char *_get_recipient_port(char *s, struct rdp_connection *con) {
   u_int16_t port;
   if (con->recipient->ss_family == AF_INET) {

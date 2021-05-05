@@ -2,6 +2,9 @@
 #include "rdp.h"
 
 #include <poll.h>
+#include <time.h>
+#include <sys/time.h>
+#include <fcntl.h>
 
 
 /********/
@@ -70,45 +73,63 @@ int main(int argc, char *argv[])
   // Oppretter nettverksstøpsel som det skal lyttes på
   listen_fd = rdp_listen(port);
   if (listen_fd == EXIT_FAILURE) return EXIT_FAILURE; 
+
   pfds->fd = listen_fd;  // vi vil at `poll` skal lytte på dette støpselet
   pfds->events = POLLIN; // vi overvåker om vi kan *lese* (ikke skrive)
+
+
+  // Seed pseudotilfeldighet
+  srand(time(NULL));
 
 
   // HOVEDLØKKE:
 
   while (1) {
 
-    // Bruker 100 ms til å sjekke om det venter noen pakker. 100 ms er tiden
-    // oppgaven ønsker å vente på ACK, før pakker sendes på nytt. Jeg sender
-    // alle pakker på nytt i hver iterasjon av hovedløkka når det ikke er noen
-    // pakker å lese uansett (som kanskje er litt dumt, siden dette sikkert
-    // sender mer data enn nødvendig). TODO: Jeg er usikker på om det er
-    // ideelt å bruke `poll()` her, med hensyn på CPU-en?
-    pkt_pending = poll(pfds, 1, 100);
-    if (rdp_error(pkt_pending, "server: poll")) return EXIT_FAILURE;
-
-
     // MOTTA EVENTUELLE PAKKER:
 
+    // Bruker 100 ms til å sjekke om det venter noen pakker. 100 ms er tiden
+    // oppgaven ønsker å vente på ACK, før pakker sendes på nytt.
+
+    pkt_pending = poll(pfds, 1, 100);
+    if (rdp_error(pkt_pending, "server: poll")) return EXIT_FAILURE;
     if (pkt_pending) {
 
-      // Hvis det er kapasitet, godta forespørsler
-      new_con = rdp_accept(listen_fd, cons, N, n < N ? TRUE : RDP_CONFULL, n);
+      // `rdp_read()` tolker innholdet. Hvis den beslutter pakken er en
+      // forbindelsesforespørsel gjøres ingenting, uten å fjerne pakken fra
+      // støpselet. Ellers hvis avsender er ukjent, kastes pakken. Ellers,
+      // vil den prøve å respondere riktig avhengig av flagg og avsender,
+      // eksempelvis ACK eller avslutningsforespørsel.
+
+      rdp_read(listen_fd, // les pakker herfra
+               cons,      // array med koblinger
+               N,         // lengde på array med koblinger
+               NULL);     // er NULL siden lagring av pakke er unødvendig
+    }
+
+    // Sjekker om det fortsatt finnes en ubehandlet pakke i støpselet. Dette
+    // er nødvendig for å forhindre at `rdp_accept()` potensielt blokkerer
+    // i det uendelige.
+
+    pkt_pending = poll(pfds, 1, 0);
+    if (rdp_error(pkt_pending, "server: poll")) return EXIT_FAILURE;
+    if (pkt_pending) {
+
+      // Leser kun forbindelsesforespørsel, eller returneres NULL, uten å
+      // fjerne pakke fra støpsel. Hvis det er kapasitet, godta forespørsler.
+
+      new_con = rdp_accept(listen_fd,                  // forespørsler herfra
+                           cons,                       // array med koblinger
+                           N,                          // lengde på `cons`
+                           n < N ? TRUE : RDP_CONFULL, // skal vi godta?
+                           rand());                    // tildel tilfeldig ID
 
       if (new_con != NULL) {
 
         // Hvis det ble opprettet en forbindelse, sett den inn i array, og
         // øk antall forbindelser `n`
-
         cons[n] = new_con;
         n++;
-
-      } else {
-
-        // Ellers leses pakken, hvor `rpd_read()` tolker innholdet. Siden
-        // serveren ikke trenger å lagre pakker den mottar noe sted, kan siste
-        // argument settes til `NULL`
-        rdp_read(listen_fd, cons, N, NULL);
 
       }
     } 
@@ -116,28 +137,42 @@ int main(int argc, char *argv[])
 
     // SEND DATA:
 
-    else rdp_write(cons, N, data, datalen);
+    // Hvis vi ikke mottok noen pakker, ble timeouten på 100 ms utløst, så vi
+    // prøver å skrive neste (eller gjenta) pakke til alle forbindelser.
+    // Så lenge det finnes koblinger i `cons` vil `rdp_write()` skrive noe,
+    // om det så er gjentatte ikke-ACK-ede pakker.
+
+    else if (rdp_write(cons, N, data, datalen));
 
 
     // FERDIG?
 
-    if (n == N) {
+    else if (n == N) {
 
-      // Sjekker om vi har tjent `N` klienter og terminert alle forbindelser
-      // ved å se om koblingsarrayet `cons[]` kun har NULL pekere.
+      // Vi kan sjekke om vi har tjent `N` klienter og terminert alle
+      // forbindelser ved å nå se om koblingsarrayet `cons[]` kun har NULL
+      // pekere. I praksis har `rdp_write()` kallet over gjort dette alt,
+      // siden det ville returnert 1 om dette ikke var tilfellet.
 
-      int j = 0;
-      while ( j < N && cons[j] == NULL ) j++; 
-      if (j == N) {
-        
-        // AVSLUTT.
+      // AVSLUTT.
 
-        printf("server: har tjent N==%d klienter. Avslutter server\n", N);
-        free(data);       // frigjør minne
-        close(listen_fd); // lukk nettverksstøpsel
+      printf("server: har tjent N==%d klienter. Avslutter server\n", N);
+      free(data);       // frigjør minne
+      close(listen_fd); // lukk nettverksstøpsel
 
-        return EXIT_SUCCESS;
-      }
+      return EXIT_SUCCESS;
+    }
+
+
+    // ELLERS, VENT PÅ UBESTEMT TID:
+
+    else {
+      
+      // Hvis ingen av de øvrige tilfellene har blitt utløst, ventes det på
+      // nye pakker i det uendelige.
+      pkt_pending = poll(pfds, 1, -1);
+      if (rdp_error(pkt_pending, "server: poll")) return EXIT_FAILURE;
+
     }
   }
 

@@ -37,6 +37,6 @@ $(INNLEVERING): $(KILDEKODE)
 	tar czf $(INNLEVERING) $(KANDIDATNUM)/
 
 clean:
-	rm -f server klient
+	rm -f server klient kernel-file-* *.gch
 	rm -f $(INNLEVERING) *.o
 	rm -f -r $(KANDIDATNUM) *.dSYM
