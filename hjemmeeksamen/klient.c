@@ -52,8 +52,7 @@ int main(int argc, char* argv[])
   if (con == NULL) {
 
     printf("NOT CONNECTED %d <?>\n", klient_id);
-    rdp_close(con, TRUE); // opprydding
-
+    fclose(output_file);  // lukk filen vi åpnet
     return EXIT_FAILURE;
 
   }

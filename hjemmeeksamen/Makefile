@@ -1,4 +1,4 @@
-.PHONY: run valgrind all innlevering clean
+.PHONY: run all innlevering clean
 
 PREKODE = send_packet.c send_packet.h
 RDP     = rdp.c rdp.h
@@ -8,7 +8,7 @@ BIN     = server klient
 
 FLAGG = -Wall -Wextra -g -std=gnu11
 
-KANDIDATNUM = xxxxxxx
+KANDIDATNUM = 15629
 INNLEVERING = $(KANDIDATNUM).tar.gz
 
 all: server klient
@@ -21,9 +21,6 @@ $(BIN):
 
 run: klient
 	./klient ::1 2021
-
-valgrind: $(BIN)
-	valgrind --leak-check=full --show-leak-kinds=all --trace-children=yes ./server 2021
 
 innlevering: $(INNLEVERING)
 

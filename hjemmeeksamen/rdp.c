@@ -261,7 +261,7 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
   con->ackseq       = -1; // signal på at ingen pakker er ACK-et ennå
   con->senderid     = pkt.recvid;
   memset(con->recipient, '\0', sizeof(struct sockaddr_storage));
-  memcpy(con->recipient, res->ai_addr, sizeof(struct sockaddr_storage));
+  memcpy(con->recipient, res->ai_addr, res->ai_addrlen);
 
   // Trenger ikke denne lenger
   freeaddrinfo(res);
@@ -293,7 +293,7 @@ struct rdp_connection *rdp_connect(char* vert, char* port, int assign_id)
     if (pkt.senderid == con->senderid) printf(": ingen server på adresse");
     printf("%s\n", RESET);
 
-    free(con);
+    rdp_close(con, TRUE);
     con = NULL;
 
   } else {
