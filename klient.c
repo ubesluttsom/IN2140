@@ -1,7 +1,6 @@
 // RDP definisjon
 #include "rdp.h"
 
-#include <poll.h>
 #include <sys/time.h>
 #include <time.h>
 
@@ -19,6 +18,8 @@ int main(int argc, char* argv[])
   set_loss_probability(atof(argv[3])); // sett pakketapsannsynlighet
 
   struct rdp_connection *con; // datastruktur med oppkoblingsinfo
+  int klient_id;              // ønsket ID, argument til `rdp_connect()`
+  int server_id;              // tildelt ID fra `rdp_connect()`
   uint8_t buf[1000];          // buffer vi mottar pakker på
   int rc;                     // «read count»
   struct pollfd pfds[1];      // fildesk. vi vil at `poll` skal sjekke
@@ -45,12 +46,20 @@ int main(int argc, char* argv[])
 
   // KOBLER TIL SERVER:
 
-  con = rdp_connect(vert, port, rand()); // prøver å koble til server
+  klient_id = rand();                       // velg tilfeldig ID
+  con = rdp_connect(vert, port, klient_id); // prøver å koble til server
+
   if (con == NULL) {
-    printf("klient: klarte ikke opprette forbindelse til server\n");
+
+    printf("NOT CONNECTED %d <?>\n", klient_id);
     rdp_close(con, TRUE); // opprydding
+
     return EXIT_FAILURE;
-  } else printf("klient: tilkoblet server!\n");
+
+  }
+
+  server_id = ntohl(con->recvid);
+  printf("CONNECTED %d %d\n", klient_id, server_id);
 
   pfds->fd = con->sockfd; // vi vil at `poll` skal lytte på dette støpselet
   pfds->events = POLLIN;  // vi overvåker om vi kan *lese* (ikke skrive)
@@ -60,8 +69,14 @@ int main(int argc, char* argv[])
 
   bzero(&buf, sizeof buf); // nuller ut pakkebufferet
 
-  // Prøver å lese pakker til forbindelsen avslutter seg selv
-  while (con != NULL) {
+
+  // Prøver å lese pakker til forbindelsen avslutter seg selv. `rdp_read()`
+  // returnerer antall leste bytes, RDP_READ_TER ved forbindelsesavsluttning
+  // (eller andre feil/infomeldinger).
+
+  rc = 0; 
+
+  while (rc != RDP_READ_TER) {
 
     // Vi venter på pakker på ubestemt tid
     pkt_pending = poll(pfds, 1, -1);
@@ -70,16 +85,19 @@ int main(int argc, char* argv[])
     rc = rdp_read(con->sockfd, &con, 1, &buf); // les pakke. BLOKKER I/O.
     
     // Hopp over hvis pakke ikke hadde noe leselig data (dvs. nyttelast)
-    if (rc == 0) continue;
+    if (rc < 0) continue;
 
-    // Skriver nyttelast til fil, byte for byte
+    // Avslutt hvis vi har fått en tom datapakke;
+    if (rc == 0) break;
+
+    // Skriver eventuell nyttelast til fil, byte for byte
     for (int i = 0; i < rc; i++) {
       fputc(buf[i], output_file);
     }
-
   }
 
-  printf("klient: mottok termineringsforespørsel! Avslutter\n");
+  printf("DISCONNECTED %d %d\n", klient_id, server_id);
+  printf("%s\n", file_name);
 
 
   // FRIGJØR MINNE:

@@ -38,5 +38,5 @@ $(INNLEVERING): $(KILDEKODE)
 
 clean:
 	rm -f server klient kernel-file-* *.gch
-	rm -f $(INNLEVERING) *.o
-	rm -f -r $(KANDIDATNUM) *.dSYM
+	# rm -f $(INNLEVERING) *.o
+	# rm -f -r $(KANDIDATNUM) *.dSYM
